@@ -19,6 +19,8 @@ interface AgentStore {
   agents: AgentSummary[];
   /** Per-agent last active chat ID for restoring on agent switch */
   lastChatIdByAgent: Record<string, string>;
+  /** Per-agent unread message count (ephemeral, not persisted) */
+  unreadCountByAgent: Record<string, number>;
   setSelectedAgent: (agentId: string) => void;
   setAgents: (agents: AgentSummary[]) => void;
   addAgent: (agent: AgentSummary) => void;
@@ -26,6 +28,8 @@ interface AgentStore {
   updateAgent: (agentId: string, updates: Partial<AgentSummary>) => void;
   setLastChatId: (agentId: string, chatId: string) => void;
   getLastChatId: (agentId: string) => string | undefined;
+  setUnreadCounts: (counts: Record<string, number>) => void;
+  clearUnread: (agentId: string) => void;
 }
 
 /**
@@ -75,6 +79,7 @@ export const useAgentStore = create<AgentStore>()(
       selectedAgent: getInitialSelectedAgent(),
       agents: [],
       lastChatIdByAgent: {},
+      unreadCountByAgent: {},
 
       setSelectedAgent: (agentId) => {
         set({ selectedAgent: agentId });
@@ -118,9 +123,23 @@ export const useAgentStore = create<AgentStore>()(
         })),
 
       getLastChatId: (agentId) => get().lastChatIdByAgent[agentId],
+
+      setUnreadCounts: (counts) => set({ unreadCountByAgent: counts }),
+
+      clearUnread: (agentId) =>
+        set((state) => {
+          if (!state.unreadCountByAgent[agentId]) return state;
+          const next = { ...state.unreadCountByAgent };
+          delete next[agentId];
+          return { unreadCountByAgent: next };
+        }),
     }),
     {
       name: STORAGE_KEY,
+      partialize: (state) => {
+        const { unreadCountByAgent: _, ...rest } = state;
+        return rest;
+      },
       storage: {
         getItem: (name) => {
           try {

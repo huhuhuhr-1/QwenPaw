@@ -46,6 +46,12 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "0.0.0.0",
       port: 5173,
+      proxy: {
+        "/api": {
+          target: "http://20.20.61.13:18006",
+          changeOrigin: true,
+        },
+      },
     },
     test: {
       globals: true,

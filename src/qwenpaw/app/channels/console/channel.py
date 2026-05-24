@@ -277,7 +277,7 @@ class ConsoleChannel(BaseChannel):
         return request
 
     async def _extract_media_message(self, message: Message) -> Message | None:
-        """Extract media message from message."""
+        """Extract media and text preview from tool output messages."""
         parts = self._message_to_content_parts(message)
         media_message = None
         if message.type in (
@@ -285,6 +285,17 @@ class ConsoleChannel(BaseChannel):
             MessageType.PLUGIN_CALL_OUTPUT,
             MessageType.MCP_TOOL_CALL_OUTPUT,
         ):
+            # Check if this is a send_file_to_user tool output — if so,
+            # include text preview parts so the frontend renders them as
+            # a normal assistant message (the @agentscope-ai/chat library
+            # only shows text from assistant-role messages, not tool-role).
+            is_send_file = any(
+                getattr(c, "type", None) == ContentType.DATA
+                and isinstance(getattr(c, "data", None), dict)
+                and c.data.get("name") == "send_file_to_user"
+                for c in (message.content or [])
+            )
+
             new_parts = []
             for part in parts:
                 if part.type == ContentType.IMAGE:
@@ -309,6 +320,8 @@ class ConsoleChannel(BaseChannel):
                         new_part.file_url,
                     )
                     new_parts.append(new_part)
+                elif part.type == ContentType.TEXT and is_send_file:
+                    new_parts.append(copy.deepcopy(part))
             if new_parts:
                 media_message = Message(
                     type=MessageType.MESSAGE,

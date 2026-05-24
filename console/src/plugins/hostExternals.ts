@@ -12,6 +12,7 @@ import React from "react";
 import ReactDOM from "react-dom";
 import * as antd from "antd";
 import * as antdIcons from "@ant-design/icons";
+import * as ReactRouterDOM from "react-router-dom";
 import { getApiUrl, getApiToken } from "../api/config";
 
 declare const VITE_API_BASE_URL: string;
@@ -29,6 +30,7 @@ export interface HostExternals {
   apiBaseUrl: string;
   getApiUrl: typeof getApiUrl;
   getApiToken: typeof getApiToken;
+  ReactRouterDOM: typeof ReactRouterDOM;
 }
 
 export interface PluginRouteDeclaration {
@@ -163,10 +165,19 @@ export function installHostExternals(): void {
       ReactDOM,
       antd,
       antdIcons,
+      ReactRouterDOM,
       apiBaseUrl,
       getApiUrl,
       getApiToken,
     };
+
+    // Expose React/ReactDOM/antd/react-router-dom globally so externalized
+    // plugin bundles (built with rollup globals) can find them.
+    (window as any).React = React;
+    (window as any).ReactDOM = ReactDOM;
+    (window as any).antd = antd;
+    (window as any).ReactRouterDOM = ReactRouterDOM;
+    (window as any).antdIcons = antdIcons;
   }
 
   if (!window.QwenPaw.registerRoutes) {

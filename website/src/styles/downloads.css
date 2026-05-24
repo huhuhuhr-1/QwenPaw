@@ -129,15 +129,16 @@
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 1.5rem;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
 }
 
 .platform-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  border-color: var(--text-muted);
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.12);
+  border-color: var(--color-primary);
+  transition: all 0.2s ease;
 }
 
 .platform-card.recommended {

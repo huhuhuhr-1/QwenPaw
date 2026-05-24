@@ -24,6 +24,7 @@ import "dayjs/locale/id";
 dayjs.extend(relativeTime);
 import MainLayout from "./layouts/MainLayout";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
+import { AgentModeProvider } from "./contexts/AgentModeContext";
 import { PluginProvider, usePlugins } from "./plugins/PluginContext";
 import { ApprovalProvider } from "./contexts/ApprovalContext";
 import { Suspense } from "react";
@@ -217,7 +218,9 @@ function App() {
   return (
     <ThemeProvider>
       <PluginProvider>
-        <AppInner />
+        <AgentModeProvider>
+          <AppInner />
+        </AgentModeProvider>
       </PluginProvider>
     </ThemeProvider>
   );

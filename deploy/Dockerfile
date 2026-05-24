@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: build console frontend (dist not committed in repo).
 # -----------------------------------------------------------------------------
-FROM agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/node:slim AS console-builder
+FROM node:20-slim AS console-builder
 WORKDIR /app
 COPY console /app/console
 RUN cd /app/console && npm ci --include=dev && npm run build
@@ -9,7 +9,7 @@ RUN cd /app/console && npm ci --include=dev && npm run build
 # -----------------------------------------------------------------------------
 # Stage 2: runtime image with Python, Chromium, and app.
 # -----------------------------------------------------------------------------
-FROM agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/node:slim
+FROM node:20-slim
 
 # ENV variables
 ENV NODE_ENV=production
@@ -83,13 +83,13 @@ WORKDIR ${WORKSPACE_DIR}
 RUN python3 -m venv venv
 ENV PATH="/app/venv/bin:$PATH"
 
+# Speed up Python package installation with uv (install via pip).
+RUN pip3 install uv && rm -rf /root/.cache
 COPY pyproject.toml setup.py README.md ./
 COPY src ./src
 COPY website/public/docs/ ./src/qwenpaw/docs/
 # Inject console dist from build stage (repo does not commit dist).
 COPY --from=console-builder /app/console/dist/ ./src/qwenpaw/console/
-# Speed up Python package installation with uv.
-COPY --from=agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/uv:latest /uv /bin/uv
 RUN uv pip install --no-cache-dir . && rm -rf ./build
 
 

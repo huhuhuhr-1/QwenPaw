@@ -114,11 +114,39 @@ src/.hypothesis/
 # Qoder IDE
 .qoder/
 
-# Cursor IDE
-.cursor/
+# Bundled plugin frontend (rebuilt at package build time)
+plugins/bundle/*/dist/
+plugins/bundle/*/ui/dist/
 
 # Worktrees
 .worktrees/
+/.playwright-mcp/
+/test_workspace/
+/test_workspace.secret/
+
+# Claw-hub module data (local memory, eval, chat history)
+claw-hub/module/*/
+claw-hub/module/.reme_store*
+claw-hub/module/chroma.sqlite3
+claw-hub/module/file_store/
+claw-hub/module/memory_file_metadata.json
+claw-hub/module/jobs.json
+claw-hub/module/chats.json
+claw-hub/module/agent.json
+claw-hub/module/skill.json
+claw-hub/module/.skill.json.lock
+
+# Evaluation data
+.jbeval/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Local scripts (developer convenience)
+run_debug.py
+update_local.sh
 
 # Local File
 /localfile/

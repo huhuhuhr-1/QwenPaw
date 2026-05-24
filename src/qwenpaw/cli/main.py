@@ -78,6 +78,9 @@ class LazyGroup(click.Group):
         if cmd_name in self.lazy_subcommands:
             module_path, attr_name, label = self.lazy_subcommands[cmd_name]
             _t = time.perf_counter()
+            print(f"\n[QwenPaw] ═══════════════════════════════════════  LAZY-LOAD", file=sys.stderr)
+            print(f"[QwenPaw] 📍 cli/main.py:77 — get_command    cmd={cmd_name}  module={module_path}", file=sys.stderr)
+            print("[QwenPaw] ═══════════════════════════════════════\n", file=sys.stderr)
             try:
                 module = __import__(module_path, fromlist=[attr_name])
                 cmd = getattr(module, attr_name)

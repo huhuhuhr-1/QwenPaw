@@ -8,6 +8,9 @@ import ConsolePollService from "../../components/ConsolePollService";
 import { ChunkErrorBoundary } from "../../components/ChunkErrorBoundary";
 import { lazyImportWithRetry } from "../../utils/lazyWithRetry";
 import { usePlugins } from "../../plugins/PluginContext";
+import { useAgentMode } from "../../contexts/AgentModeContext";
+import AgentSidebar from "../../components/AgentSidebar";
+import AgentChatView from "../../components/AgentChatView";
 import styles from "../index.module.less";
 
 // Chat is eagerly loaded (default landing page)
@@ -78,6 +81,7 @@ export default function MainLayout() {
   const location = useLocation();
   const currentPath = location.pathname;
   const { pluginRoutes } = usePlugins();
+  const { isAgentMode } = useAgentMode();
 
   // Resolve selected key: check static routes first, then plugin routes
   let selectedKey = pathToKey[currentPath] || "";
@@ -88,6 +92,22 @@ export default function MainLayout() {
     selectedKey = matchedPlugin
       ? matchedPlugin.path.replace(/^\//, "")
       : "chat";
+  }
+
+  // ── Agent Mode Layout ──────────────────────────────────────────────────────
+  if (isAgentMode) {
+    return (
+      <Layout className={styles.mainLayout}>
+        <Header />
+        <Layout className={styles.agentLayoutRow}>
+          <AgentSidebar />
+          <div className={styles.agentChatArea}>
+            <ConsolePollService />
+            <AgentChatView />
+          </div>
+        </Layout>
+      </Layout>
+    );
   }
 
   return (

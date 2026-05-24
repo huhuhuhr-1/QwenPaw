@@ -187,31 +187,41 @@ class MessageRenderer:
                         )
                         out.extend(block_parts)
                     else:
-                        media_types = (
-                            ContentType.IMAGE,
-                            ContentType.AUDIO,
-                            ContentType.VIDEO,
-                            ContentType.FILE,
-                        )
-                        # Internal tools (e.g. view_image/view_video) produce
-                        # media for the LLM, not the user — skip.
-                        media_parts = (
-                            []
-                            if name in s.internal_tools
-                            else [
-                                p
-                                for p in block_parts
-                                if getattr(p, "type", None) in media_types
-                            ]
-                        )
-                        out.extend(media_parts)
-                        if not media_parts:
-                            out.append(
-                                TextContent(
-                                    text=_fmt_tool_output_label(name, s)
-                                    + _fmt_code_block("...", s),
-                                ),
+                        if name == "send_file_to_user":
+                            # For send_file_to_user, keep all blocks including
+                            # text previews even when show_tool_details is False
+                            media_parts = (
+                                []
+                                if name in s.internal_tools
+                                else block_parts
                             )
+                            out.extend(media_parts)
+                        else:
+                            media_types = (
+                                ContentType.IMAGE,
+                                ContentType.AUDIO,
+                                ContentType.VIDEO,
+                                ContentType.FILE,
+                            )
+                            # Internal tools (e.g. view_image/view_video) produce
+                            # media for the LLM, not the user — skip.
+                            media_parts = (
+                                []
+                                if name in s.internal_tools
+                                else [
+                                    p
+                                    for p in block_parts
+                                    if getattr(p, "type", None) in media_types
+                                ]
+                            )
+                            out.extend(media_parts)
+                            if not media_parts:
+                                out.append(
+                                    TextContent(
+                                        text=_fmt_tool_output_label(name, s)
+                                        + _fmt_code_block("...", s),
+                                    ),
+                                )
                     continue
 
                 if isinstance(output, str):
@@ -282,13 +292,18 @@ class MessageRenderer:
                         pass
                     if isinstance(output, list):
                         block_parts = _blocks_to_parts(output)
-                        media_parts.extend(
-                            [
-                                p
-                                for p in block_parts
-                                if getattr(p, "type", None) in media_types
-                            ],
-                        )
+                        if name == "send_file_to_user":
+                            # For send_file_to_user, keep all blocks including
+                            # text previews even when filter_tool_messages is True
+                            media_parts.extend(block_parts)
+                        else:
+                            media_parts.extend(
+                                [
+                                    p
+                                    for p in block_parts
+                                    if getattr(p, "type", None) in media_types
+                                ],
+                            )
                 return media_parts
             parts = _parts_for_tool_output(content)
             if not parts:

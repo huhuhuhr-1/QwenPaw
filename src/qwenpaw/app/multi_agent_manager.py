@@ -6,6 +6,7 @@ including lazy loading, lifecycle management, and hot reloading.
 """
 import asyncio
 import logging
+import sys
 import time
 from typing import Dict, Set
 
@@ -58,6 +59,9 @@ class MultiAgentManager:
         Raises:
             ConfigurationException: If agent ID not found in configuration
         """
+        print(f"\n[QwenPaw] ═══════════════════════════════════════  AGENT-GET", file=sys.stderr)
+        print(f"[QwenPaw] 📍 multi_agent_manager.py:47 — get_agent({agent_id})  cache_hit={agent_id in self.agents}", file=sys.stderr)
+        print("[QwenPaw] ═══════════════════════════════════════\n", file=sys.stderr)
         # Fast path: already loaded (no lock)
         if agent_id in self.agents:
             logger.debug(f"Returning cached agent: {agent_id}")
@@ -106,6 +110,9 @@ class MultiAgentManager:
 
         # We are the starter — create outside the lock for parallelism
         t0 = time.perf_counter()
+        print(f"\n[QwenPaw] ═══════════════════════════════════════  WORKSPACE-CREATE", file=sys.stderr)
+        print(f"[QwenPaw] 📍 multi_agent_manager.py:108 — Workspace({agent_id})  dir={agent_ref.workspace_dir}", file=sys.stderr)
+        print("[QwenPaw] ═══════════════════════════════════════\n", file=sys.stderr)
         logger.debug(f"Creating new workspace: {agent_id}")
         instance = Workspace(
             agent_id=agent_id,

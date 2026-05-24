@@ -939,6 +939,26 @@ export default function ChatPage() {
   // Refresh chat when selectedAgent changes, preserving last active chat per agent
   const { setLastChatId, getLastChatId } = useAgentStore();
   const prevSelectedAgentRef = useRef(selectedAgent);
+  const hasRestoredOnMountRef = useRef(false);
+
+  // Restore session on initial mount (when ChatPage first renders inside AgentChatView)
+  useEffect(() => {
+    if (hasRestoredOnMountRef.current) return;
+    hasRestoredOnMountRef.current = true;
+
+    // If URL already has a session, let it load naturally via preferredChatId
+    const match = location.pathname.match(/^\/chat(?:\/(.+))?$/);
+    const urlChatId = match?.[1] || null;
+    if (urlChatId) return;
+
+    // Otherwise, restore last session for this agent if we have one
+    const restored = getLastChatId(selectedAgent);
+    if (restored) {
+      navigateRef.current(`/chat/${restored}`, { replace: true });
+      sessionApi.preferredChatId = restored;
+    }
+  }, []);
+
   useEffect(() => {
     const prevAgent = prevSelectedAgentRef.current;
     if (prevAgent !== selectedAgent && prevAgent !== undefined) {
@@ -949,7 +969,7 @@ export default function ChatPage() {
         setLastChatId(prevAgent, currentChatId);
       }
 
-      // Restore last chat ID for the agent we're switching to
+      // Restore last chat ID for the agent we switched to
       const restored = getLastChatId(selectedAgent);
       if (restored) {
         navigateRef.current(`/chat/${restored}`, { replace: true });

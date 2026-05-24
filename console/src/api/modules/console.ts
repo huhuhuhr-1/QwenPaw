@@ -50,7 +50,11 @@ export interface PendingApproval {
 
 export const consoleApi = {
   getPushMessages: (sessionId?: string) =>
-    request<{ messages: PushMessage[]; pending_approvals: PendingApproval[] }>(
+    request<{
+      messages: PushMessage[];
+      pending_approvals: PendingApproval[];
+      unread_counts: Record<string, number>;
+    }>(
       sessionId
         ? `/console/push-messages?session_id=${sessionId}`
         : "/console/push-messages",
@@ -95,4 +99,9 @@ export const consoleApi = {
 
   getInboxTrace: (runId: string) =>
     request<InboxTrace>(`/console/inbox/traces/${encodeURIComponent(runId)}`),
+
+  clearUnread: (agentId: string) =>
+    request<{ cleared: boolean }>(`/console/clear-unread/${encodeURIComponent(agentId)}`, {
+      method: "POST",
+    }),
 };

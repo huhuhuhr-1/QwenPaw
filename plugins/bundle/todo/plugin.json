@@ -1,0 +1,26 @@
+{
+  "id": "todo",
+  "name": "Todo",
+  "version": "0.1.0",
+  "type": "general",
+  "description": "Agent task management — create, track, and update tasks during sessions.",
+  "description_i18n": {
+    "zh-CN": "任务管理 — 在会话中创建、跟踪和更新任务。",
+    "en-US": "Agent task management — create, track, and update tasks during sessions."
+  },
+  "author": "QwenPaw",
+  "entry": {
+    "backend": "plugin.py",
+    "frontend": "dist/index.js"
+  },
+  "dependencies": [],
+  "min_version": "1.1.7",
+  "meta": {
+    "tools": [
+      { "name": "create_todo", "description": "Create a new task", "icon": "📋" },
+      { "name": "get_todo", "description": "Get a task by ID", "icon": "🔍" },
+      { "name": "update_todo", "description": "Update a task", "icon": "✏️" },
+      { "name": "list_todos", "description": "List tasks with filters", "icon": "📋" }
+    ]
+  }
+}

@@ -1,15 +1,14 @@
-import { Layout, Space, Badge, Spin, Tooltip, Dropdown } from "antd";
-import type { MenuProps } from "antd";
+import { Layout, Space, Badge, Spin, Tooltip } from "antd";
 import LanguageSwitcher from "../components/LanguageSwitcher/index";
 import ThemeToggleButton from "../components/ThemeToggleButton";
 import { useTranslation } from "react-i18next";
 import { Button, Modal } from "@agentscope-ai/design";
+import { useAgentMode } from "../contexts/AgentModeContext";
 import styles from "./index.module.less";
 import api from "../api";
 import {
   GITHUB_URL,
   getDocsUrl,
-  getFeatureDemosUrl,
   getFaqUrl,
   getReleaseNotesUrl,
   PYPI_URL,
@@ -22,17 +21,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {
-  CopyOutlined,
-  CheckOutlined,
-  TagOutlined,
-  GithubOutlined,
-  FileTextOutlined,
-  ReadOutlined,
-  PlayCircleOutlined,
-  QuestionCircleOutlined,
-  DownOutlined,
-} from "@ant-design/icons";
+import { CopyOutlined, CheckOutlined, TagOutlined } from "@ant-design/icons";
 
 const { Header: AntHeader } = Layout;
 
@@ -64,6 +53,7 @@ function UpdateCodeBlock({ code }: { code: string }) {
 export default function Header() {
   const { t, i18n } = useTranslation();
   const { isDark } = useTheme();
+  const { isAgentMode, toggleAgentMode } = useAgentMode();
   const [version, setVersion] = useState<string>("");
   const [latestVersion, setLatestVersion] = useState<string>("");
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -165,78 +155,89 @@ export default function Header() {
     <>
       <AntHeader className={styles.header}>
         <div className={styles.logoWrapper}>
-          <img
-            src={isDark ? "/logo-dark.svg" : "/logo-light.svg"}
-            alt="QwenPaw"
-            className={styles.logoImg}
-          />
-          <div className={styles.logoDivider} />
-          {version && (
-            <Badge
-              dot={!!hasUpdate}
-              color="rgba(255, 157, 77, 1)"
-              offset={[4, 28]}
-            >
-              <span
-                className={`${styles.versionBadge} ${
-                  hasUpdate
-                    ? styles.versionBadgeClickable
-                    : styles.versionBadgeDefault
-                }`}
-                onClick={() => hasUpdate && handleOpenUpdateModal()}
-              >
-                v{version}
-              </span>
-            </Badge>
+          {isAgentMode ? (
+            <span className={styles.agentTeamTitle}>智能体团队</span>
+          ) : (
+            <>
+              <img
+                src={isDark ? "/logo-dark.svg" : "/logo-light.svg"}
+                alt="QwenPaw"
+                className={styles.logoImg}
+              />
+              <div className={styles.logoDivider} />
+              {version && (
+                <Badge
+                  dot={!!hasUpdate}
+                  color="rgba(255, 157, 77, 1)"
+                  offset={[4, 28]}
+                >
+                  <span
+                    className={`${styles.versionBadge} ${
+                      hasUpdate
+                        ? styles.versionBadgeClickable
+                        : styles.versionBadgeDefault
+                    }`}
+                    onClick={() => hasUpdate && handleOpenUpdateModal()}
+                  >
+                    v{version}
+                  </span>
+                </Badge>
+              )}
+            </>
           )}
         </div>
         <Space size="middle">
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: "tutorial",
-                  icon: <ReadOutlined />,
-                  label: t("header.tutorial"),
-                  onClick: () => handleNavClick(getDocsUrl(i18n.language)),
-                },
-                {
-                  key: "featureDemos",
-                  icon: <PlayCircleOutlined />,
-                  label: t("header.featureDemos"),
-                  onClick: () =>
-                    handleNavClick(getFeatureDemosUrl(i18n.language)),
-                },
-                {
-                  key: "changelog",
-                  icon: <FileTextOutlined />,
-                  label: t("header.changelog"),
-                  onClick: () =>
-                    handleNavClick(getReleaseNotesUrl(i18n.language)),
-                },
-                {
-                  key: "faq",
-                  icon: <QuestionCircleOutlined />,
-                  label: t("header.faq"),
-                  onClick: () => handleNavClick(getFaqUrl(i18n.language)),
-                },
-              ] as MenuProps["items"],
-            }}
-          >
-            <Button type="text">
-              {t("header.resources")} <DownOutlined />
-            </Button>
-          </Dropdown>
-          <Tooltip title={t("header.github")}>
-            <Button
-              type="text"
-              icon={<GithubOutlined />}
-              onClick={() => handleNavClick(GITHUB_URL)}
-            >
-              {t("header.github")}
-            </Button>
-          </Tooltip>
+          {!isAgentMode && (
+            <>
+              <Tooltip title={t("header.changelog")}>
+                <Button
+                  type="text"
+                  onClick={() => handleNavClick(getReleaseNotesUrl(i18n.language))}
+                >
+                  {t("header.changelog")}
+                </Button>
+              </Tooltip>
+              <Tooltip title={t("header.docs")}>
+                <Button
+                  type="text"
+                  onClick={() => handleNavClick(getDocsUrl(i18n.language))}
+                >
+                  {t("header.docs")}
+                </Button>
+              </Tooltip>
+              <Tooltip title={t("header.faq")}>
+                <Button
+                  type="text"
+                  onClick={() => handleNavClick(getFaqUrl(i18n.language))}
+                >
+                  {t("header.faq")}
+                </Button>
+              </Tooltip>
+              <Tooltip title={t("header.github")}>
+                <Button type="text" onClick={() => handleNavClick(GITHUB_URL)}>
+                  {t("header.github")}
+                </Button>
+              </Tooltip>
+            </>
+          )}
           <div className={styles.headerDivider} />
+          <div className={styles.modeSwitch}>
+            <span className={`${styles.modeLabel} ${!isAgentMode ? styles.modeLabelActive : ""}`}>
+              {t("header.configMode", "全配置")}
+            </span>
+            <Tooltip title={isAgentMode ? t("header.switchToConfig", "切换到全配置模式") : t("header.switchToAgent", "切换到智能体模式")}>
+              <button
+                className={`${styles.modeToggle} ${isAgentMode ? styles.modeToggleActive : ""}`}
+                onClick={toggleAgentMode}
+                aria-label="Toggle agent mode"
+              >
+                <span className={styles.modeToggleKnob} />
+              </button>
+            </Tooltip>
+            <span className={`${styles.modeLabel} ${isAgentMode ? styles.modeLabelActive : ""}`}>
+              {t("header.agentMode", "智能体")}
+            </span>
+          </div>
           <LanguageSwitcher />
           <ThemeToggleButton />
         </Space>

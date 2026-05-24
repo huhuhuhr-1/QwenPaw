@@ -1,0 +1,22 @@
+{
+  "id": "time_now",
+  "name": "Current Time",
+  "version": "1.0.0",
+  "type": "tool",
+  "description": "获取当前系统时间",
+  "entry": {
+    "backend": "time_now.py"
+  },
+  "dependencies": [],
+  "meta": {
+    "tools": [
+      {
+        "name": "get_current_time",
+        "description": "获取当前系统时间，支持格式化输出",
+        "icon": "🕐",
+        "requires_config": false,
+        "config_fields": []
+      }
+    ]
+  }
+}

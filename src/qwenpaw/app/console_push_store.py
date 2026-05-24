@@ -81,6 +81,35 @@ def _prune_expired_locked(max_age_seconds: int) -> None:
     _list[:] = [m for m in _list if m["ts"] >= cutoff]
 
 
+# ── Per-agent unread counter ─────────────────────────────────────────────────
+_unread: Dict[str, int] = {}
+_lock_unread = asyncio.Lock()
+
+
+async def increment_unread(agent_id: str) -> None:
+    """Increment unread count for an agent."""
+    async with _lock_unread:
+        _unread[agent_id] = _unread.get(agent_id, 0) + 1
+
+
+async def clear_unread(agent_id: str) -> None:
+    """Reset unread count for an agent to zero."""
+    async with _lock_unread:
+        _unread.pop(agent_id, None)
+
+
+async def get_unread(agent_id: str) -> int:
+    """Return unread count for an agent."""
+    async with _lock_unread:
+        return _unread.get(agent_id, 0)
+
+
+async def get_all_unread() -> Dict[str, int]:
+    """Return a copy of the full unread counts dict."""
+    async with _lock_unread:
+        return dict(_unread)
+
+
 async def get_recent(
     max_age_seconds: int = _MAX_AGE_SECONDS,
 ) -> List[Dict[str, Any]]:

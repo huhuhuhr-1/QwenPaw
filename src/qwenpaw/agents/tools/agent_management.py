@@ -501,6 +501,13 @@ async def chat_with_agent(
         root_session_id=final_root_session,
     )
 
+    # Notify the target's unread counter (skip self-messages)
+    caller_id = resolve_calling_agent_id(None)
+    if caller_id != normalized_to_agent:
+        from ...app.console_push_store import increment_unread
+
+        await increment_unread(normalized_to_agent)
+
     response_data = await asyncio.to_thread(
         collect_final_agent_chat_response,
         None,
@@ -585,6 +592,13 @@ async def submit_to_agent(
         from_agent=None,
         root_session_id=final_root_session,
     )
+
+    # Notify the target's unread counter (skip self-messages)
+    caller_id = resolve_calling_agent_id(None)
+    if caller_id != normalized_to_agent:
+        from ...app.console_push_store import increment_unread
+
+        await increment_unread(normalized_to_agent)
 
     result = await asyncio.to_thread(
         submit_agent_chat_task,

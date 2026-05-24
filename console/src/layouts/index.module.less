@@ -730,3 +730,91 @@
     color: rgba(255, 255, 255, 0.3);
   }
 }
+
+// ─── Agent Layout Row ───────────────────────────────────────────────────────
+.agentLayoutRow {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agentChatArea {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// ─── Agent Mode Switch ───────────────────────────────────────────────────────
+.modeSwitch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modeLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.38);
+  transition: color 0.2s;
+  user-select: none;
+
+  .dark-mode & {
+    color: rgba(255, 255, 255, 0.38);
+  }
+}
+
+.modeLabelActive {
+  color: rgba(255, 127, 22, 0.85);
+
+  .dark-mode & {
+    color: rgba(255, 157, 77, 0.85);
+  }
+}
+
+.modeToggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  padding: 0;
+
+  .dark-mode & {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.modeToggleActive {
+  background: rgba(255, 127, 22, 0.7);
+  border-color: rgba(255, 127, 22, 0.5);
+
+  .dark-mode & {
+    background: rgba(255, 157, 77, 0.6);
+    border-color: rgba(255, 157, 77, 0.4);
+  }
+}
+
+.modeToggleKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  .modeToggleActive & {
+    transform: translateX(16px);
+  }
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X } from "lucide-react";
 import { consoleApi, type PushMessage } from "../../api/modules/console";
 import { useApprovalContext } from "../../contexts/ApprovalContext";
+import { useAgentStore } from "../../stores/agentStore";
 import styles from "./index.module.less";
 
 const POLL_INTERVAL_MS = 2500;
@@ -45,6 +46,21 @@ export default function ConsolePollService() {
             if (serialized !== prevApprovalsRef.current) {
               prevApprovalsRef.current = serialized;
               setApprovals(res.pending_approvals);
+            }
+          }
+
+          // Update per-agent unread counts
+          if (res?.unread_counts) {
+            const { selectedAgent, setUnreadCounts, clearUnread } =
+              useAgentStore.getState();
+            // Auto-clear unread for the currently selected agent
+            if (selectedAgent && res.unread_counts[selectedAgent]) {
+              clearUnread(selectedAgent);
+              consoleApi.clearUnread(selectedAgent).catch(() => {});
+              const { [selectedAgent]: _, ...rest } = res.unread_counts;
+              setUnreadCounts(rest);
+            } else {
+              setUnreadCounts(res.unread_counts);
             }
           }
 

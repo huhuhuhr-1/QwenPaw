@@ -394,7 +394,16 @@ async def get_push_messages(
         for p in all_pending
     ]
 
-    return {"messages": messages, "pending_approvals": approvals_data}
+    # Get per-agent unread counts
+    from ..console_push_store import get_all_unread
+
+    unread_counts = await get_all_unread()
+
+    return {
+        "messages": messages,
+        "pending_approvals": approvals_data,
+        "unread_counts": unread_counts,
+    }
 
 
 @router.get("/inbox/events")
@@ -456,3 +465,12 @@ async def get_inbox_trace(run_id: str):
     if trace is None:
         raise HTTPException(status_code=404, detail="trace not found")
     return trace
+
+
+@router.post("/clear-unread/{agent_id}")
+async def post_clear_unread(agent_id: str):
+    """Clear unread count for an agent."""
+    from ..console_push_store import clear_unread
+
+    await clear_unread(agent_id)
+    return {"cleared": True}

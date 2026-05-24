@@ -138,7 +138,7 @@ export function Hero() {
             <button
               type="button"
               onClick={scrollToQuickStart}
-              className="inline-flex h-11 w-full max-w-60 items-center justify-center gap-1.5 rounded-lg bg-(--color-primary) px-4 text-[15px] font-normal text-(--color-text) ] transition hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-primary) sm:h-10 sm:w-auto sm:max-w-none"
+              className="inline-flex h-11 w-full max-w-60 items-center justify-center gap-1.5 rounded-lg bg-(--color-primary) px-4 text-[15px] font-semibold text-white transition-all duration-200 hover:brightness-110 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-primary) sm:h-10 sm:w-auto sm:max-w-none"
             >
               <DottedlinedownArrowIcon />
               <span>{t("hero.quickStart")}</span>

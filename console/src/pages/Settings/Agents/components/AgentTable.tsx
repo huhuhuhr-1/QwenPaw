@@ -154,13 +154,7 @@ export function AgentTable({
             size="middle"
             icon={<EditOutlined />}
             onClick={() => onEdit(record)}
-            disabled={record.id === "default"}
-            style={record.id === "default" ? disabledStyle : iconStyle}
-            title={
-              record.id === "default"
-                ? t("agent.defaultNotEditable")
-                : undefined
-            }
+            style={iconStyle}
           />
           <Popconfirm
             title={
