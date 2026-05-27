@@ -4,7 +4,7 @@ import { Code, FlaskConical, MessageSquare, Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCodingMode, useProjectDir } from "../../stores/codingModeStore";
 import { useAgentStore } from "../../stores/agentStore";
-import { useViewModeStore, type ViewMode } from "../../stores/viewModeStore";
+import { useViewModeStore } from "../../stores/viewModeStore";
 import { getApiUrl } from "../../api/config";
 import { buildAuthHeaders } from "../../api/authHeaders";
 import { useNavigate } from "react-router-dom";

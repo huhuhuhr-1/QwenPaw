@@ -150,3 +150,12 @@ update_local.sh
 
 # Local File
 /localfile/
+
+# Code analysis databases (Understand, CodeGraph)
+/.understand/
+/.understand-anything/
+/.codegraph/
+
+# Tauri/Rust build output
+console/src-tauri/target/
+
