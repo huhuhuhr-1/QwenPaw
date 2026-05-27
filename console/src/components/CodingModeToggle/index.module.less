@@ -1,10 +1,17 @@
-.toggle {
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 7px;
+  border: 1.5px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  overflow: hidden;
+}
+
+.segment {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
-  border-radius: 6px;
-  border: 1.5px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  border: none;
   background: transparent;
   color: var(--text-secondary, rgba(0, 0, 0, 0.55));
   font-size: 13px;
@@ -12,17 +19,15 @@
   cursor: pointer;
   transition: all 0.18s ease;
   letter-spacing: 0.01em;
+  border-right: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
 
-  &:hover:not(:disabled) {
-    border-color: var(--primary-color, #1677ff);
-    color: var(--primary-color, #1677ff);
-    background: var(--primary-bg, rgba(22, 119, 255, 0.06));
+  &:last-child {
+    border-right: none;
   }
 
-  &.active {
-    border-color: var(--primary-color, #1677ff);
+  &:hover:not(:disabled) {
     color: var(--primary-color, #1677ff);
-    background: var(--primary-bg, rgba(22, 119, 255, 0.08));
+    background: var(--primary-bg, rgba(22, 119, 255, 0.06));
   }
 
   &:disabled {
@@ -31,13 +36,14 @@
   }
 }
 
-.icon {
-  display: flex;
-  align-items: center;
-}
+.segmentActive {
+  color: #fff;
+  background: var(--primary-color, #1677ff);
 
-.label {
-  line-height: 1;
+  &:hover:not(:disabled) {
+    color: #fff;
+    background: var(--primary-color, #1677ff);
+  }
 }
 
 // ---- Experimental modal ------------------------------------------------
@@ -81,20 +87,27 @@
 // Match the GitHub / Resources <Button type="text"> rendered by antd's
 // dark algorithm — same text color and a subdued border.
 :global(.dark-mode) {
-  .toggle {
+  .segmented {
     border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .segment {
+    border-right-color: rgba(255, 255, 255, 0.15);
     color: rgba(255, 255, 255, 0.85);
 
     &:hover:not(:disabled) {
-      border-color: #4da3ff;
       color: #4da3ff;
       background: rgba(22, 119, 255, 0.12);
     }
+  }
 
-    &.active {
-      border-color: #4da3ff;
-      color: #4da3ff;
-      background: rgba(22, 119, 255, 0.18);
+  .segmentActive {
+    color: #fff;
+    background: #1677ff;
+
+    &:hover:not(:disabled) {
+      color: #fff;
+      background: #1677ff;
     }
   }
 

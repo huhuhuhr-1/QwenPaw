@@ -10,6 +10,9 @@ import { lazyImportWithRetry } from "../../utils/lazyWithRetry";
 import { usePlugins } from "../../plugins/PluginContext";
 import { useCodingMode } from "../../stores/codingModeStore";
 import { useSyncCodingMode } from "../../stores/useSyncCodingMode";
+import { useViewModeStore } from "../../stores/viewModeStore";
+import AgentSidebar from "../../components/AgentSidebar";
+import AgentChatView from "../../components/AgentChatView";
 import styles from "../index.module.less";
 
 // Chat is eagerly loaded (default landing page)
@@ -104,6 +107,23 @@ export default function MainLayout() {
   // Backend is the source of truth for Coding Mode state — refill the
   // in-memory store every time the selected agent changes.
   useSyncCodingMode();
+  const viewMode = useViewModeStore((s) => s.viewMode);
+
+  // ── Agent Mode Layout ────────────────────────────────────────────────
+  if (viewMode === "agent") {
+    return (
+      <Layout className={styles.mainLayout}>
+        <Header />
+        <Layout className={styles.agentLayoutRow}>
+          <AgentSidebar />
+          <div className={styles.agentChatArea}>
+            <ConsolePollService />
+            <AgentChatView />
+          </div>
+        </Layout>
+      </Layout>
+    );
+  }
 
   // Resolve selected key: check static routes first, then plugin routes
   let selectedKey = pathToKey[currentPath] || "";

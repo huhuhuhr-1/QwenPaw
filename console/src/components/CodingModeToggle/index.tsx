@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
-import { Modal, Tooltip } from "antd";
-import { Code, FlaskConical, MessageSquare } from "lucide-react";
+import { Modal } from "antd";
+import { Code, FlaskConical, MessageSquare, Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCodingMode, useProjectDir } from "../../stores/codingModeStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useViewModeStore, type ViewMode } from "../../stores/viewModeStore";
 import { getApiUrl } from "../../api/config";
 import { buildAuthHeaders } from "../../api/authHeaders";
 import { useNavigate } from "react-router-dom";
@@ -16,13 +17,15 @@ export default function CodingModeToggle() {
   const { t } = useTranslation();
   const { codingMode, initialized, setCodingMode } = useCodingMode();
   const { selectedAgent } = useAgentStore();
+  const viewMode = useViewModeStore((s) => s.viewMode);
+  const setViewMode = useViewModeStore((s) => s.setViewMode);
   const navigate = useNavigate();
   const { projectDir } = useProjectDir();
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showProjectSelect, setShowProjectSelect] = useState(false);
 
-  const activate = useCallback(async () => {
+  const activateCoding = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     try {
@@ -36,15 +39,14 @@ export default function CodingModeToggle() {
         body: JSON.stringify({ enabled: true }),
       });
       setCodingMode(true);
-      navigate("/coding");
     } catch {
       // Silently ignore
     } finally {
       setLoading(false);
     }
-  }, [loading, selectedAgent, setCodingMode, navigate]);
+  }, [loading, selectedAgent, setCodingMode]);
 
-  const deactivate = useCallback(async () => {
+  const deactivateCoding = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     try {
@@ -58,74 +60,95 @@ export default function CodingModeToggle() {
         body: JSON.stringify({ enabled: false }),
       });
       setCodingMode(false);
-      navigate("/chat");
     } catch {
       // Silently ignore
     } finally {
       setLoading(false);
     }
-  }, [loading, selectedAgent, setCodingMode, navigate]);
+  }, [loading, selectedAgent, setCodingMode]);
 
-  const toggle = useCallback(async () => {
+  const handleCoding = useCallback(async () => {
+    // Already in coding mode — toggle off
     if (codingMode) {
-      // Exiting doesn't need confirmation
-      await deactivate();
+      setViewMode("chat");
+      await deactivateCoding();
+      navigate("/chat");
       return;
     }
-    // First-time activation: show experimental warning
+    // Enter coding mode — check confirmation + project
     const confirmed = localStorage.getItem(CONFIRMED_KEY);
     if (!confirmed) {
       setShowConfirm(true);
-    } else if (projectDir === undefined) {
-      // Never selected a project yet → show project picker
-      setShowProjectSelect(true);
-    } else {
-      // null = workspace default, string = specific path → go directly
-      await activate();
+      return;
     }
-  }, [codingMode, activate, deactivate, projectDir]);
+    if (projectDir === undefined) {
+      setShowProjectSelect(true);
+      return;
+    }
+    setViewMode("coding");
+    await activateCoding();
+    navigate("/coding");
+  }, [codingMode, activateCoding, deactivateCoding, projectDir, navigate, setViewMode]);
+
+  const handleChat = useCallback(async () => {
+    setViewMode("chat");
+    if (codingMode) {
+      await deactivateCoding();
+    }
+    navigate("/chat");
+  }, [codingMode, deactivateCoding, navigate, setViewMode]);
+
+  const handleAgent = useCallback(async () => {
+    setViewMode("agent");
+    if (codingMode) {
+      await deactivateCoding();
+    }
+    navigate("/chat");
+  }, [codingMode, deactivateCoding, navigate, setViewMode]);
 
   const handleConfirm = useCallback(() => {
     localStorage.setItem(CONFIRMED_KEY, "1");
     setShowConfirm(false);
-    // After confirming experimental warning, show project selection
     setShowProjectSelect(true);
   }, []);
 
   const handleProjectConfirm = useCallback(async () => {
     setShowProjectSelect(false);
-    await activate();
-  }, [activate]);
+    setViewMode("coding");
+    await activateCoding();
+    navigate("/coding");
+  }, [activateCoding, navigate, setViewMode]);
 
   return (
     <>
-      <Tooltip
-        title={
-          codingMode
-            ? t("codingMode.exitTooltip")
-            : t("codingMode.enterTooltip")
-        }
-        placement="bottom"
-      >
+      <div className={styles.segmented}>
         <button
           type="button"
-          className={`${styles.toggle} ${codingMode ? styles.active : ""}`}
-          onClick={() => void toggle()}
+          className={`${styles.segment} ${viewMode === "chat" ? styles.segmentActive : ""}`}
+          onClick={() => void handleChat()}
           disabled={loading || !initialized}
-          aria-label={
-            codingMode
-              ? t("codingMode.exitTooltip")
-              : t("codingMode.enterTooltip")
-          }
         >
-          <span className={styles.icon}>
-            {codingMode ? <MessageSquare size={14} /> : <Code size={14} />}
-          </span>
-          <span className={styles.label}>
-            {codingMode ? t("codingMode.btnChat") : t("codingMode.btnCode")}
-          </span>
+          <MessageSquare size={14} />
+          <span>{t("codingMode.btnChat")}</span>
         </button>
-      </Tooltip>
+        <button
+          type="button"
+          className={`${styles.segment} ${viewMode === "coding" ? styles.segmentActive : ""}`}
+          onClick={() => void handleCoding()}
+          disabled={loading || !initialized}
+        >
+          <Code size={14} />
+          <span>{t("codingMode.btnCode")}</span>
+        </button>
+        <button
+          type="button"
+          className={`${styles.segment} ${viewMode === "agent" ? styles.segmentActive : ""}`}
+          onClick={() => void handleAgent()}
+        >
+          <Bot size={14} />
+          <span>{t("codingMode.btnAgent", "智能体")}</span>
+        </button>
+      </div>
 
       {/* Step 1: Experimental warning */}
       <Modal
@@ -144,8 +167,12 @@ export default function CodingModeToggle() {
         width={440}
       >
         <div className={styles.modalBody}>
-          <p className={styles.modalDesc}>{t("codingMode.experimentalDesc")}</p>
-          <p className={styles.modalNote}>{t("codingMode.experimentalNote")}</p>
+          <p className={styles.modalDesc}>
+            {t("codingMode.experimentalDesc")}
+          </p>
+          <p className={styles.modalNote}>
+            {t("codingMode.experimentalNote")}
+          </p>
         </div>
       </Modal>
 
@@ -153,9 +180,8 @@ export default function CodingModeToggle() {
       <ProjectSelectModal
         open={showProjectSelect}
         onClose={() => {
-          // User dismissed → enter with default workspace
           setShowProjectSelect(false);
-          void activate();
+          void handleProjectConfirm();
         }}
         onConfirm={() => void handleProjectConfirm()}
       />
