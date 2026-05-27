@@ -25,6 +25,7 @@
 
 - [Windows 使用指南](#windows-使用指南)
 - [macOS 使用指南](#macos-使用指南)
+- [Ubuntu/Linux 构建指南](#ubuntulinux-构建指南)
 - [技术支持](#技术支持)
 
 ---
@@ -232,6 +233,93 @@ A: 当前采用
 - ✅ **CI/CD 可验证**：GitHub Actions 自动构建，日志可查
 - ✅ **用户审计**：可以自行检查代码并本地构建
 - ✅ **一次信任**：手动信任后永久有效
+
+---
+
+## Ubuntu/Linux 构建指南
+
+### 系统要求
+
+- **操作系统**: Ubuntu 24.04+ 或其他主流 Linux 发行版
+- **架构**: x64 (64位)
+- **依赖**: WebKit2GTK、GTK3、DBus
+
+### 构建步骤
+
+#### 1. 安装系统依赖
+
+```bash
+# Ubuntu 24.04+
+sudo apt install -y \
+  libdbus-1-dev \
+  libglib2.0-dev \
+  libgtk-3-dev \
+  libwebkit2gtk-4.1-dev \
+  pkg-config
+
+# Ubuntu 26.04 (Resolute)
+# 如果 apt 源指向错误版本，需要先修复：
+sudo bash -c 'cat > /etc/apt/sources.list.d/ubuntu.sources << EOF
+Types: deb deb-src
+URIs: http://archive.ubuntu.com/ubuntu/
+Suites: resolute resolute-updates resolute-backports
+Components: main universe multiverse restricted
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF'
+sudo apt update && sudo apt install -y libdbus-1-dev libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+```
+
+#### 2. 构建前端
+
+```bash
+cd /opt/github/QwenPaw/console
+npm run build:tauri-bootstrap
+```
+
+#### 3. 构建 PyInstaller 后端
+
+```bash
+bash /opt/github/QwenPaw/scripts/pack-tauri/build_pyinstaller.sh
+```
+
+#### 4. 构建 Tauri 应用
+
+```bash
+cd /opt/github/QwenPaw/console/src-tauri
+npx @tauri-apps/cli build
+```
+
+#### 5. 安装 deb 包
+
+```bash
+sudo dpkg -i /opt/github/QwenPaw/console/src-tauri/target/release/bundle/deb/QwenPaw\ Desktop_*.deb
+```
+
+### 产物位置
+
+| 类型 | 路径 |
+|------|------|
+| deb 安装包 | `console/src-tauri/target/release/bundle/deb/QwenPaw Desktop_*.deb` |
+| 可执行文件 | `/usr/bin/qwenpaw-desktop` |
+| 后端资源 | `/usr/lib/QwenPaw Desktop/binaries/qwenpaw-backend/` |
+| 日志文件 | `~/.qwenpaw/desktop.log` |
+
+### 常见问题
+
+**Q: 构建失败，提示 `Package dbus-1 was not found`？**
+
+A: 安装 `libdbus-1-dev`，或修复 apt 源版本（见上述步骤）
+
+**Q: 与旧包 `qwenpaw` 冲突？**
+
+A: 先卸载旧包：`sudo dpkg -r qwenpaw`
+
+**Q: 如何调试启动问题？**
+
+A: 直接运行查看日志：
+```bash
+qwenpaw-desktop 2>&1 | tee /tmp/qwenpaw.log
+```
 
 ---
 
