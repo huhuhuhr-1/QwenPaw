@@ -1,5 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# AI agent / copilot local config
+.aone_copilot/
+.agents/
+
 # dependencies
 /.pnp
 .pnp.js
@@ -120,6 +124,9 @@ plugins/bundle/*/ui/dist/
 
 # Worktrees
 .worktrees/
+.qwenpaw/worktrees/
+
+# Playwright / test workspace
 /.playwright-mcp/
 /test_workspace/
 /test_workspace.secret/
@@ -139,11 +146,6 @@ claw-hub/module/.skill.json.lock
 # Evaluation data
 .jbeval/
 
-# IDE
-.idea/
-.vscode/
-*.iml
-
 # Local scripts (developer convenience)
 run_debug.py
 update_local.sh
@@ -159,3 +161,8 @@ update_local.sh
 # Tauri/Rust build output
 console/src-tauri/target/
 
+# E2E test artifacts
+e2e/reports/
+e2e/data/
+e2e/.pytest_cache/
+e2e/__pycache__/

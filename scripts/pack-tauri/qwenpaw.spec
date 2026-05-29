@@ -62,8 +62,6 @@ datas += collect_tree(CONSOLE_DIST, "qwenpaw/console")
 # Include reme package data files (configs, tool yamls, etc.)
 datas += collect_data_files("reme")
 datas += collect_data_files("whisper")
-# Include webview (required for desktop mode, installed as pywebview)
-datas += collect_data_files("webview")
 
 # Collect package metadata for packages that use importlib.metadata at runtime.
 # Keep this allowlist in sync when adding runtime dependencies that query
@@ -96,59 +94,58 @@ for _pkg in _metadata_pkgs:
     except Exception:
         pass
 
-a = Analysis(
+hiddenimports = [
+    # uvicorn internals (not auto-discovered by PyInstaller)
+    "uvicorn.logging",
+    "uvicorn.loops",
+    "uvicorn.loops.auto",
+    "uvicorn.protocols",
+    "uvicorn.protocols.http",
+    "uvicorn.protocols.http.auto",
+    "uvicorn.protocols.websockets",
+    "uvicorn.protocols.websockets.auto",
+    "uvicorn.lifespan",
+    "uvicorn.lifespan.on",
+    # All CLI sub-commands (dynamically loaded by Click)
+    *collect_submodules("qwenpaw.cli"),
+    # All channel adapters (imported on-demand at runtime)
+    *collect_submodules("qwenpaw.app.channels"),
+    # ASGI app entry points
+    "qwenpaw.app._app",
+    "qwenpaw.app.api",
+    "qwenpaw.app.middleware",
+    "qwenpaw.app.multi_agent_manager",
+    "qwenpaw.app.runner",
+    # Backup modules are exposed through qwenpaw.backup.__getattr__, which
+    # PyInstaller cannot discover from static imports.
+    *collect_submodules("qwenpaw.backup"),
+    # Third-party packages that use dynamic imports. Use
+    # collect_submodules() for packages that load many submodules by name;
+    # keep the bare package string when runtime code imports only the
+    # package root or when PyInstaller needs the top-level module anchor.
+    *collect_submodules("dotenv"),
+    "dotenv",
+    "a2a",
+    "a2a.types",
+    *collect_submodules("acp"),
+    "acp",
+    "agentscope_runtime",
+    "psutil",
+    "multipart",
+    "websockets",
+    "modelscope",
+    "modelscope.hub.api",
+    "modelscope.hub.snapshot_download",
+    *collect_submodules("whisper"),
+    *collect_submodules("chromadb"),
+]
+
+backend = Analysis(
     [str(SRC / "tauri" / "entry.py")],
     pathex=[str(REPO_ROOT), str(REPO_ROOT / "src")],
     binaries=[],
     datas=datas,
-    hiddenimports=[
-        # uvicorn internals (not auto-discovered by PyInstaller)
-        "uvicorn.logging",
-        "uvicorn.loops",
-        "uvicorn.loops.auto",
-        "uvicorn.protocols",
-        "uvicorn.protocols.http",
-        "uvicorn.protocols.http.auto",
-        "uvicorn.protocols.websockets",
-        "uvicorn.protocols.websockets.auto",
-        "uvicorn.lifespan",
-        "uvicorn.lifespan.on",
-        # All CLI sub-commands (dynamically loaded by Click)
-        *collect_submodules("qwenpaw.cli"),
-        # All channel adapters (imported on-demand at runtime)
-        *collect_submodules("qwenpaw.app.channels"),
-        # ASGI app entry points
-        "qwenpaw.app._app",
-        "qwenpaw.app.api",
-        "qwenpaw.app.middleware",
-        "qwenpaw.app.multi_agent_manager",
-        "qwenpaw.app.runner",
-        # Backup modules are exposed through qwenpaw.backup.__getattr__, which
-        # PyInstaller cannot discover from static imports.
-        *collect_submodules("qwenpaw.backup"),
-        # Third-party packages that use dynamic imports. Use
-        # collect_submodules() for packages that load many submodules by name;
-        # keep the bare package string when runtime code imports only the
-        # package root or when PyInstaller needs the top-level module anchor.
-        *collect_submodules("dotenv"),
-        "dotenv",
-        "a2a",
-        "a2a.types",
-        *collect_submodules("acp"),
-        "acp",
-        "agentscope_runtime",
-        "psutil",
-        "multipart",
-        "websockets",
-        "modelscope",
-        "modelscope.hub.api",
-        "modelscope.hub.snapshot_download",
-        *collect_submodules("whisper"),
-        *collect_submodules("chromadb"),
-        # pywebview for desktop mode (imported as 'webview')
-        *collect_submodules("webview"),
-        "webview",
-    ],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -156,11 +153,25 @@ a = Analysis(
     noarchive=False,
 )
 
-pyz = PYZ(a.pure)
+cli = Analysis(
+    [str(SRC / "tauri" / "cli_entry.py")],
+    pathex=[str(REPO_ROOT), str(REPO_ROOT / "src")],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+)
 
-exe = EXE(
-    pyz,
-    a.scripts,
+backend_pyz = PYZ(backend.pure)
+cli_pyz = PYZ(cli.pure)
+
+backend_exe = EXE(
+    backend_pyz,
+    backend.scripts,
     [],
     name="qwenpaw-backend",
     debug=False,
@@ -176,70 +187,17 @@ exe = EXE(
     exclude_binaries=True,
 )
 
-# Desktop entry point — runs the qwenpaw desktop command with pywebview
-desktop_exe = EXE(
-    pyz,
-    a.scripts,
+cli_exe = EXE(
+    cli_pyz,
+    cli.scripts,
     [],
-    name="qwenpaw-desktop",
+    name="qwenpaw",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,
-    disable_windowed_traceback=True,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=codesign_identity,
-    exclude_binaries=True,
-)
-
-# Second Analysis for the desktop entry point (pywebview-based)
-desktop_a = Analysis(
-    [str(SRC / "tauri" / "desktop_entry.py")],
-    pathex=[str(REPO_ROOT), str(REPO_ROOT / "src")],
-    binaries=[],
-    datas=datas,
-    hiddenimports=[
-        *a.hiddenimports,
-        # GTK/PyGObject for pywebview on Linux
-        *collect_submodules("gi"),
-        "gi",
-        "gi.repository",
-        "gi.repository.Gtk",
-        "gi.repository.Gdk",
-        "gi.repository.GLib",
-        "gi.repository.GObject",
-        "gi.repository.Gio",
-        "gi.repository.Pango",
-        "gi.repository.cairo",
-        "gi.repository.WebKit2",
-        # cairo (GTK dependency)
-        "cairo",
-        # psutil (for agentscope-runtime)
-        *collect_submodules("psutil"),
-        "psutil",
-    ],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    noarchive=False,
-)
-
-desktop_pyz = PYZ(desktop_a.pure)
-
-desktop_exe = EXE(
-    desktop_pyz,
-    desktop_a.scripts,
-    [],
-    name="qwenpaw-desktop",
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=False,
-    console=False,
-    disable_windowed_traceback=True,
+    console=True,
+    disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=codesign_identity,
@@ -247,10 +205,12 @@ desktop_exe = EXE(
 )
 
 coll = COLLECT(
-    exe,
-    desktop_exe,
-    a.binaries + desktop_a.binaries,
-    a.datas + desktop_a.datas,
+    backend_exe,
+    cli_exe,
+    backend.binaries,
+    backend.datas,
+    cli.binaries,
+    cli.datas,
     strip=False,
     upx=False,
     name="qwenpaw-backend",
