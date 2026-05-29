@@ -1,6 +1,7 @@
 mod backend;
+mod tray;
 
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{RunEvent, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -12,13 +13,17 @@ pub fn run() {
             backend::restart_backend,
         ])
         .manage(backend::BackendState::default())
-        .setup(backend::setup)
+        .setup(|app| {
+            backend::setup(app)?;
+            tray::setup_tray(app)?;
+            Ok(())
+        })
         .on_window_event(|window, event| {
-            // The app currently has a single "main" window, so closing it
-            // is equivalent to quitting. If a multi-window mode is introduced,
-            // make this window-count aware and keep the exit-event fallback.
-            if matches!(event, WindowEvent::CloseRequested { .. }) {
-                backend::stop(window.app_handle());
+            // Hide the window instead of closing it so the backend keeps
+            // running. Use the tray menu "Quit" to actually stop and exit.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .build(tauri::generate_context!());

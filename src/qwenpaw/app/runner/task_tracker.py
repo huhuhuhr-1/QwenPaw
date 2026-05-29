@@ -21,6 +21,9 @@ from typing import Any, AsyncGenerator, Callable, Coroutine, Optional
 logger = logging.getLogger(__name__)
 
 _SENTINEL = None
+# 2026-05-28 SSE 事件缓冲区上限：长任务（如采集）产生数千条事件，
+# 全缓存会造成内存膨胀。最近 200 条足够断线重连回放
+_MAX_BUFFER_SIZE = 200
 
 
 @dataclass
@@ -290,6 +293,9 @@ class TaskTracker:
                         if tracker is None:
                             return
                         async with tracker.lock:
+                            # 2026-05-28 滑动窗口：超限丢弃最旧事件，防止 OOM
+                            if len(run.buffer) >= _MAX_BUFFER_SIZE:
+                                run.buffer.pop(0)
                             run.buffer.append(sse)
                             for q in run.queues:
                                 q.put_nowait(sse)
@@ -304,6 +310,9 @@ class TaskTracker:
                     tracker = tracker_ref()
                     if tracker is not None:
                         async with tracker.lock:
+                            # 2026-05-28 错误事件也受缓冲区上限约束
+                            if len(run.buffer) >= _MAX_BUFFER_SIZE:
+                                run.buffer.pop(0)
                             run.buffer.append(err_sse)
                             for q in run.queues:
                                 q.put_nowait(err_sse)

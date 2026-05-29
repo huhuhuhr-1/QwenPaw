@@ -44,6 +44,10 @@ logger = logging.getLogger(__name__)
 
 _MAX_DIRECT_URL_DOWNLOAD_BYTES = 10 * 1024 * 1024
 _CDP_CONNECT_TIMEOUT_SECONDS = 30.0
+# 2026-05-28 每页 console 日志上限：采集任务访问大量页面时防止 OOM
+_MAX_CONSOLE_LOGS_PER_PAGE = 500
+# 2026-05-28 每页网络请求记录上限：滑动窗口保留最近 N 条
+_MAX_NETWORK_REQUESTS_PER_PAGE = 1000
 _HEADLESS_VERIFICATION_WARNING = (
     "Headless browser launches are more likely to trigger verification. "
     "If verification appears, call browser_use with action='stop' to stop "
@@ -804,11 +808,17 @@ def _attach_page_listeners(state: dict, page, page_id: str) -> None:
     logs = state["console_logs"].setdefault(page_id, [])
 
     def on_console(msg):
+        # 2026-05-28 滑动窗口：超限时丢弃最旧的日志，避免采集任务 OOM
+        if len(logs) >= _MAX_CONSOLE_LOGS_PER_PAGE:
+            logs.pop(0)
         logs.append({"level": msg.type, "text": msg.text})
 
     page.on("console", on_console)
 
     def on_request(req):
+        # 2026-05-28 滑动窗口：超限时丢弃最旧的请求记录
+        if len(requests_list) >= _MAX_NETWORK_REQUESTS_PER_PAGE:
+            requests_list.pop(0)
         requests_list.append(
             {
                 "url": req.url,
@@ -844,6 +854,29 @@ def _attach_page_listeners(state: dict, page, page_id: str) -> None:
         choosers.append(chooser)
 
     page.on("filechooser", on_filechooser)
+
+    # 2026-05-28 无论页面怎么关的（主动 close、浏览器关、崩溃），都触发清理
+    page.on(
+        "close",
+        lambda _p: _cleanup_page_state(state, page_id),
+    )
+
+
+def _cleanup_page_state(state: dict, page_id: str) -> None:
+    """2026-05-28 从 state 移除已关闭页面的所有条目（幂等，重复调用无害）"""
+    state["pages"].pop(page_id, None)
+    for key in (
+        "refs",
+        "refs_frame",
+        "console_logs",
+        "network_requests",
+        "pending_dialogs",
+        "pending_file_choosers",
+    ):
+        state[key].pop(page_id, None)
+    if state.get("current_page_id") == page_id:
+        remaining = list(state["pages"].keys())
+        state["current_page_id"] = remaining[0] if remaining else None
 
 
 def _next_page_id(state: dict) -> str:
@@ -1949,19 +1982,8 @@ async def _action_close(state: dict, page_id: str) -> ToolResponse:
             await _run_sync(page.close)
         else:
             await page.close()
-        del state["pages"][page_id]
-        for key in (
-            "refs",
-            "refs_frame",
-            "console_logs",
-            "network_requests",
-            "pending_dialogs",
-            "pending_file_choosers",
-        ):
-            state[key].pop(page_id, None)
-        if state.get("current_page_id") == page_id:
-            remaining = list(state["pages"].keys())
-            state["current_page_id"] = remaining[0] if remaining else None
+        # 2026-05-28 page.close() 触发 "close" 事件 → _cleanup_page_state 自动清理，
+        # 这里不再手动逐字段 pop，避免与事件监听器重复清理
         return _tool_response(
             json.dumps(
                 {"ok": True, "message": f"Closed page '{page_id}'"},
