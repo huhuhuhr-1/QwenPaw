@@ -66,10 +66,11 @@ if ! "$PYTHON_BIN" -c "import PyInstaller" 2> /dev/null; then
 fi
 echo "PyInstaller installed"
 
-# Install project dependencies (ensures ALL runtime deps are importable)
+# Install project dependencies (skip [full] extras to avoid bundling
+# torch / whisper / CUDA — those are loaded externally by plugins.)
 echo "== Installing project dependencies =="
-install_python_packages -e ".[full]"
-echo "Project dependencies installed with full extras"
+install_python_packages -e "."
+echo "Project dependencies installed"
 
 # Fix agent-client-protocol namespace collision
 # PyPI has an empty 'acp' stub that shadows the real package
@@ -93,7 +94,6 @@ fi
 "$PYTHON_BIN" -m PyInstaller "$SPEC_FILE" \
     --distpath "${DIST}/pyinstaller" \
     --workpath "${DIST}/pyinstaller-build" \
-    --clean \
     --noconfirm
 
 echo "PyInstaller build complete"

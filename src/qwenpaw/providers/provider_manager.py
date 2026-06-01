@@ -723,7 +723,7 @@ PROVIDER_MODELSCOPE = OpenAIProvider(
     base_url="https://api-inference.modelscope.cn/v1",
     api_key_prefix="ms",
     models=MODELSCOPE_MODELS,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_DASHSCOPE = OpenAIProvider(
@@ -761,7 +761,7 @@ PROVIDER_ALIYUN_CODINGPLAN = OpenAIProvider(
     models=ALIYUN_CODINGPLAN_MODELS,
     # This provider doesn't support connection check without model config
     support_connection_check=False,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_ALIYUN_CODINGPLAN_INTL = OpenAIProvider(
@@ -772,7 +772,7 @@ PROVIDER_ALIYUN_CODINGPLAN_INTL = OpenAIProvider(
     models=ALIYUN_CODINGPLAN_MODELS,
     # This provider doesn't support connection check without model config
     support_connection_check=False,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_ALIYUN_TOKENPLAN = OpenAIProvider(
@@ -784,7 +784,7 @@ PROVIDER_ALIYUN_TOKENPLAN = OpenAIProvider(
     api_key_prefix="sk-sp",
     models=ALIYUN_TOKENPLAN_MODELS,
     support_connection_check=False,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_ZHIPU_CN = OpenAIProvider(
@@ -793,7 +793,7 @@ PROVIDER_ZHIPU_CN = OpenAIProvider(
     base_url="https://open.bigmodel.cn/api/paas/v4",
     api_key_prefix="",
     models=ZHIPU_MODELS,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_ZHIPU_CN_CODINGPLAN = OpenAIProvider(
@@ -802,7 +802,7 @@ PROVIDER_ZHIPU_CN_CODINGPLAN = OpenAIProvider(
     base_url="https://open.bigmodel.cn/api/coding/paas/v4",
     api_key_prefix="",
     models=ZHIPU_MODELS,
-    freeze_url=True,
+    freeze_url=False,
     support_connection_check=False,
 )
 
@@ -812,7 +812,7 @@ PROVIDER_ZHIPU_INTL = OpenAIProvider(
     base_url="https://api.z.ai/api/paas/v4",
     api_key_prefix="",
     models=ZHIPU_MODELS,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_ZHIPU_INTL_CODINGPLAN = OpenAIProvider(
@@ -821,7 +821,7 @@ PROVIDER_ZHIPU_INTL_CODINGPLAN = OpenAIProvider(
     base_url="https://api.z.ai/api/coding/paas/v4",
     api_key_prefix="",
     models=ZHIPU_MODELS,
-    freeze_url=True,
+    freeze_url=False,
     support_connection_check=False,
 )
 
@@ -838,7 +838,7 @@ PROVIDER_OPENAI = OpenAIProvider(
     base_url="https://api.openai.com/v1",
     api_key_prefix="sk-",
     models=OPENAI_MODELS,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_OPENCODE = OpenAIProvider(
@@ -869,7 +869,7 @@ PROVIDER_MINIMAX = AnthropicProvider(
     base_url="https://api.minimax.io/anthropic",
     models=MINIMAX_MODELS,
     chat_model="AnthropicChatModel",
-    freeze_url=True,
+    freeze_url=False,
     # This provider doesn't support connection check without model config
     support_connection_check=False,
 )
@@ -880,7 +880,7 @@ PROVIDER_MINIMAX_CN = AnthropicProvider(
     base_url="https://api.minimaxi.com/anthropic",
     models=MINIMAX_MODELS,
     chat_model="AnthropicChatModel",
-    freeze_url=True,
+    freeze_url=False,
     # This provider doesn't support connection check without model config
     support_connection_check=False,
 )
@@ -891,7 +891,7 @@ PROVIDER_KIMI_CN = OpenAIProvider(
     base_url="https://api.moonshot.cn/v1",
     api_key_prefix="",
     models=KIMI_MODELS,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_KIMI_INTL = OpenAIProvider(
@@ -900,7 +900,7 @@ PROVIDER_KIMI_INTL = OpenAIProvider(
     base_url="https://api.moonshot.ai/v1",
     api_key_prefix="",
     models=KIMI_MODELS,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_DEEPSEEK = OpenAIProvider(
@@ -909,7 +909,7 @@ PROVIDER_DEEPSEEK = OpenAIProvider(
     base_url="https://api.deepseek.com",
     api_key_prefix="sk-",
     models=DEEPSEEK_MODELS,
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_ANTHROPIC = AnthropicProvider(
@@ -929,7 +929,7 @@ PROVIDER_GEMINI = GeminiProvider(
     api_key_prefix="",
     models=GEMINI_MODELS,
     chat_model="GeminiChatModel",
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_OLLAMA = OllamaProvider(
@@ -947,7 +947,7 @@ PROVIDER_OPENROUTER = OpenRouterProvider(
     base_url="https://openrouter.ai/api/v1",
     api_key_prefix="sk-or-v1-",
     models=[],
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_LMSTUDIO = LMStudioProvider(
@@ -967,7 +967,7 @@ PROVIDER_SILICONFLOW_CN = OpenAIProvider(
     base_url="https://api.siliconflow.cn/v1",
     api_key_prefix="sk-",
     models=[],
-    freeze_url=True,
+    freeze_url=False,
     require_api_key=True,
 )
 
@@ -977,7 +977,7 @@ PROVIDER_SILICONFLOW_INTL = OpenAIProvider(
     base_url="https://api.siliconflow.com/v1",
     api_key_prefix="sk-",
     models=[],
-    freeze_url=True,
+    freeze_url=False,
     require_api_key=True,
 )
 
@@ -987,7 +987,7 @@ PROVIDER_VOLCENGINE_CN = OpenAIProvider(
     base_url="https://ark.cn-beijing.volces.com/api/v3",
     api_key_prefix="",
     models=VOLCENGINE_MODELS,
-    freeze_url=True,
+    freeze_url=False,
     support_model_discovery=False,
 )
 
@@ -998,7 +998,7 @@ PROVIDER_VOLCENGINE_CN_CODINGPLAN = OpenAIProvider(
     api_key_prefix="",
     models=VOLCENGINE_CODINGPLAN_MODELS,
     support_connection_check=False,
-    freeze_url=True,
+    freeze_url=False,
     support_model_discovery=False,
 )
 

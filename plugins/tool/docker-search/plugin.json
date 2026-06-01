@@ -1,0 +1,22 @@
+{
+  "id": "docker-search",
+  "name": "Docker Image Search",
+  "version": "1.0.0",
+  "type": "tool",
+  "description": "搜索 Docker 镜像，查询版本信息和国内华为云镜像",
+  "entry": {
+    "backend": "docker_search.py"
+  },
+  "dependencies": ["httpx>=0.24.0"],
+  "meta": {
+    "tools": [
+      {
+        "name": "search_docker_image",
+        "description": "搜索 Docker 镜像，支持关键词搜索、数量限制和平台架构过滤。返回镜像的 source（源地址）、mirror（华为云镜像地址）、platform（平台架构）、size（大小）等信息。",
+        "icon": "🐳",
+        "requires_config": false,
+        "config_fields": []
+      }
+    ]
+  }
+}

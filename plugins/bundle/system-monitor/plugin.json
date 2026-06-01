@@ -1,0 +1,26 @@
+{
+  "id": "system-monitor",
+  "name": "System Monitor",
+  "version": "1.0.0",
+  "type": "frontend",
+  "description": "系统监控插件 - 实时采集和展示主机 CPU、内存、磁盘、句柄、负载指标",
+  "description_i18n": {
+    "zh-CN": "系统监控插件 - 实时采集和展示主机 CPU、内存、磁盘、句柄、负载指标",
+    "en-US": "System Monitor - Real-time host CPU, memory, disk, handle, and load metrics"
+  },
+  "entry": {
+    "frontend": "frontend/dist/index.iife.js",
+    "backend": "plugin.py"
+  },
+  "dependencies": [],
+  "min_version": "1.1.7",
+  "meta": {
+    "category": "system-tools",
+    "features": [
+      "realtime-metrics",
+      "trend-charts",
+      "process-topn",
+      "configurable-interval"
+    ]
+  }
+}

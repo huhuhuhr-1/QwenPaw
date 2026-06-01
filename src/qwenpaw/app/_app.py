@@ -314,7 +314,21 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
     # via MultiAgentManager.get_agent() lazy-loading / event wait.
     # ================================================================
 
+    # Guard against duplicate _background_startup execution when backend
+    # is restarted (e.g. by Tauri frontend polling timeout). Without this,
+    # each restart would spawn a new _background_startup that re-loads all
+    # plugins and re-triggers dependency installation, causing a cascade.
+    _background_startup_running = False
+
     async def _background_startup():  # pylint: disable=too-many-statements
+        nonlocal _background_startup_running
+        if _background_startup_running:
+            logger.debug(
+                "_background_startup already in progress, skipping duplicate call"
+            )
+            return
+        _background_startup_running = True
+
         try:
             # Start all configured agents (truly parallel now)
             await multi_agent_manager.start_all_configured_agents()
@@ -333,6 +347,8 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
             ]
 
             plugin_loader = PluginLoader(plugin_dirs)
+            app.state.plugin_loader = plugin_loader
+            app.state.plugin_registry = plugin_loader.registry
 
             plugin_loader.registry.set_plugin_http_app(app)
 
@@ -368,9 +384,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
                 logger.debug(
                     f"Registered plugin provider: {provider_id}",
                 )
-
-            app.state.plugin_loader = plugin_loader
-            app.state.plugin_registry = plugin_loader.registry
 
             # ---- Plugin Control Commands ----
             logger.debug("Registering plugin control commands...")
@@ -463,6 +476,8 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
                 "Background startup encountered an error",
                 exc_info=True,
             )
+        finally:
+            _background_startup_running = False
 
     _bg_task = asyncio.create_task(_background_startup())
 

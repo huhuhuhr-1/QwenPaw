@@ -61,7 +61,7 @@ datas += collect_tree(CONSOLE_DIST, "qwenpaw/console")
 
 # Include reme package data files (configs, tool yamls, etc.)
 datas += collect_data_files("reme")
-datas += collect_data_files("whisper")
+
 
 # Collect package metadata for packages that use importlib.metadata at runtime.
 # Keep this allowlist in sync when adding runtime dependencies that query
@@ -86,7 +86,7 @@ _metadata_pkgs = [
     "agentscope-runtime",
     "huggingface_hub",
     "modelscope",
-    "openai-whisper",
+    "aiosqlite",
 ]
 for _pkg in _metadata_pkgs:
     try:
@@ -131,13 +131,13 @@ hiddenimports = [
     "acp",
     "agentscope_runtime",
     "psutil",
+    "aiosqlite",
+    *collect_submodules("chromadb"),
     "multipart",
     "websockets",
     "modelscope",
     "modelscope.hub.api",
     "modelscope.hub.snapshot_download",
-    *collect_submodules("whisper"),
-    *collect_submodules("chromadb"),
 ]
 
 backend = Analysis(
@@ -149,7 +149,15 @@ backend = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        "torch",
+        "torchvision",
+        "torchaudio",
+        "nvidia",
+        "triton",
+        "whisper",
+        "openai-whisper",
+    ],
     noarchive=False,
 )
 
@@ -162,7 +170,15 @@ cli = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        "torch",
+        "torchvision",
+        "torchaudio",
+        "nvidia",
+        "triton",
+        "whisper",
+        "openai-whisper",
+    ],
     noarchive=False,
 )
 

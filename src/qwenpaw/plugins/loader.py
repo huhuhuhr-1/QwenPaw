@@ -2,6 +2,7 @@
 """Plugin loader for discovering and loading plugins."""
 
 import asyncio
+import fcntl
 import importlib.util
 import inspect
 import json
@@ -10,7 +11,9 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -115,7 +118,7 @@ class PluginLoader:
 
         missing: List[str] = []
         for line in requirements_file.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
+            line = line.strip().lstrip('﻿')
             if not line or line.startswith("#") or line.startswith("-"):
                 continue
             try:
@@ -144,6 +147,29 @@ class PluginLoader:
 
         return missing
 
+    @staticmethod
+    def _pip_process_alive(pid_path: Path) -> Optional[int]:
+        """Check if the pip subprocess recorded in *pid_path* is alive.
+
+        Returns the PID if the process exists, ``None`` otherwise.
+        """
+        try:
+            raw = pid_path.read_text().strip()
+            if not raw:
+                return None
+            pid = int(raw)
+        except (OSError, ValueError):
+            return None
+        if pid <= 0:
+            return None
+        try:
+            os.kill(pid, 0)
+            return pid
+        except ProcessLookupError:
+            return None
+        except PermissionError:
+            return pid  # exists, just owned by another user
+
     async def _ensure_dependencies_installed(
         self,
         source_path: Path,
@@ -155,26 +181,146 @@ class PluginLoader:
         packages are missing or version-incompatible, installs them via
         pip/uv before the plugin module is imported.
 
+        *Cross-process safety* — uses ``fcntl.flock`` + a PID file so
+        that multiple backend instances spawned by the desktop shell
+        never run ``pip install`` for the same plugin concurrently and
+        never start a duplicate install while an orphaned subprocess
+        from a killed backend is still running.
+
         Args:
             source_path: Plugin directory containing requirements.txt
             plugin_id: Plugin identifier (for log messages)
         """
         requirements_file = source_path / "requirements.txt"
+        if not requirements_file.exists():
+            return
         missing_deps = self._check_dependencies_satisfied(requirements_file)
         if not missing_deps:
             return
-        logger.info(
-            "Plugin '%s' has %d unsatisfied dependency(ies): %s. "
-            "Installing...",
-            plugin_id,
-            len(missing_deps),
-            ", ".join(missing_deps),
-        )
-        await asyncio.to_thread(
-            self._install_requirements,
-            requirements_file,
-            plugin_id,
-        )
+
+        lock_dir = Path(tempfile.gettempdir()) / "qwenpaw_plugin_locks"
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = lock_dir / f"{plugin_id}.lock"
+        pid_path = lock_dir / f"{plugin_id}.pid"
+
+        # ── Cross-process lock via O_EXCL atomic create ────────────────
+        # fcntl.flock leaks the lock fd into subprocesses on some Python
+        # 3.10 / kernel combinations (close_fds doesn't close inherited
+        # fds reliably).  O_EXCL | O_CREAT is atomic at the VFS layer and
+        # no fd is kept open – nothing to leak.
+        def _try_lock() -> bool:
+            """Try to acquire the lock. Returns True if acquired."""
+            try:
+                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, str(os.getpid()).encode())
+                os.close(fd)
+                return True
+            except FileExistsError:
+                return False
+
+        def _clear_stale_lock() -> None:
+            """Remove the lock file if the owner is dead."""
+            try:
+                raw = lock_path.read_text().strip()
+                if not raw:
+                    lock_path.unlink(missing_ok=True)
+                    return
+                owner = int(raw)
+            except (ValueError, OSError):
+                lock_path.unlink(missing_ok=True)
+                return
+            try:
+                os.kill(owner, 0)
+            except ProcessLookupError:
+                lock_path.unlink(missing_ok=True)
+
+        async def _wait_old_pip() -> bool:
+            """Wait for an orphaned pip from a previous backend to finish.
+
+            Returns ``True`` if deps are now satisfied (old pip finished),
+            ``False`` if we should start a fresh install.
+            """
+            old_pid = self._pip_process_alive(pid_path)
+            if old_pid is None:
+                return False
+
+            logger.info(
+                "Plugin '%s': existing pip (pid=%d) is still installing, "
+                "waiting up to 300 s…",
+                plugin_id,
+                old_pid,
+            )
+            deadline = time.monotonic() + 300
+            while time.monotonic() < deadline:
+                await asyncio.sleep(3)
+                if not self._check_dependencies_satisfied(requirements_file):
+                    logger.info(
+                        "Plugin '%s': old pip finished, deps satisfied",
+                        plugin_id,
+                    )
+                    return True
+                if self._pip_process_alive(pid_path) is None:
+                    # Old pip died — fall through to start fresh
+                    logger.info(
+                        "Plugin '%s': old pip (pid=%d) has exited, "
+                        "re-checking…",
+                        plugin_id,
+                        old_pid,
+                    )
+                    break
+            # Timeout or old pip died — verify one last time
+            if not self._check_dependencies_satisfied(requirements_file):
+                return True
+            logger.info(
+                "Plugin '%s': old pip timed out or died, "
+                "starting fresh install",
+                plugin_id,
+            )
+            return False
+
+        try:
+            # ── Acquire atomic file lock ────────────────────────────────
+            deadline = time.monotonic() + 600
+            while True:
+                # First try to clear any stale lock before locking
+                _clear_stale_lock()
+                if _try_lock():
+                    break
+                # Lock held by another live process — wait
+                if time.monotonic() > deadline:
+                    raise RuntimeError(
+                        f"Timed out waiting for install lock "
+                        f"for plugin '{plugin_id}'",
+                    )
+                await asyncio.sleep(1)
+
+            # ── Re-check deps (another process may already have done it) ─
+            missing_deps = self._check_dependencies_satisfied(requirements_file)
+            if not missing_deps:
+                return
+
+            # ── Wait for orphaned pip from a killed backend ─────────────
+            if await _wait_old_pip():
+                return
+
+            # ── Start fresh install ─────────────────────────────────────
+            logger.info(
+                "Plugin '%s' has %d unsatisfied dependency(ies): %s. "
+                "Installing…",
+                plugin_id,
+                len(missing_deps),
+                ", ".join(missing_deps),
+            )
+            pid_path.write_text("0")  # marks "attempting to install"
+            await asyncio.to_thread(
+                self._install_requirements,
+                requirements_file,
+                plugin_id,
+                pid_path,
+            )
+        finally:
+            lock_path.unlink(missing_ok=True)
+            pid_path.unlink(missing_ok=True)
 
     async def load_plugin(
         self,
@@ -392,6 +538,7 @@ class PluginLoader:
         *,
         timeout: int,
         plugin_id: str,
+        pid_path: Optional[Path] = None,
     ) -> subprocess.CompletedProcess:
         """Run *cmd*; stream stdout/stderr to debug logs in real time."""
         logger.debug(
@@ -406,7 +553,16 @@ class PluginLoader:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            start_new_session=True,
+            close_fds=True,
         ) as proc:
+            # Record the pip subprocess PID so other backend instances can
+            # detect that an install is already in progress.
+            if pid_path is not None:
+                try:
+                    pid_path.write_text(str(proc.pid))
+                except OSError:
+                    pass
 
             def _read_output() -> None:
                 assert proc.stdout is not None
@@ -439,6 +595,7 @@ class PluginLoader:
         self,
         requirements_file: Path,
         plugin_id: str,
+        pid_path: Optional[Path] = None,
     ) -> None:
         """Install Python dependencies for a plugin (blocking).
 
@@ -453,6 +610,9 @@ class PluginLoader:
         Args:
             requirements_file: Path to requirements.txt
             plugin_id: Plugin identifier (for log messages)
+            pid_path: Optional path to write the pip subprocess PID to.
+                Used by ``_ensure_dependencies_installed`` for cross-process
+                stale-install detection.
 
         Raises:
             RuntimeError: If all install attempts fail or time out
@@ -478,6 +638,7 @@ class PluginLoader:
                 ],
                 timeout=timeout,
                 plugin_id=plugin_id,
+                pid_path=pid_path,
             )
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError(
@@ -528,6 +689,7 @@ class PluginLoader:
                 ],
                 timeout=timeout,
                 plugin_id=plugin_id,
+                pid_path=pid_path,
             )
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError(
@@ -611,14 +773,10 @@ class PluginLoader:
                 f"Copied plugin '{plugin_id}' to {target_dir}",
             )
 
-        # Install Python dependencies (off the event loop)
-        requirements_file = target_dir / "requirements.txt"
-        if requirements_file.exists():
-            await asyncio.to_thread(
-                self._install_requirements,
-                requirements_file,
-                plugin_id,
-            )
+        # Install Python dependencies if any are missing.
+        # Use _ensure_dependencies_installed (with check + lock)
+        # rather than calling _install_requirements blindly.
+        await self._ensure_dependencies_installed(target_dir, plugin_id)
 
         # Re-read manifest from the installed location so that
         # source_path in the record points to the correct directory
