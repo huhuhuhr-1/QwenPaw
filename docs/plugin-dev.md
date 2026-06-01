@@ -55,7 +55,7 @@ Console 加载
   → GET /api/frontend_plugin              获取启用了前端的插件列表
   → usePluginLoader.ts: loadAllPlugins()
       → fetch(plugin frontend_entry)       下载 dist/index.js
-      → import(blobURL)                    执行 IIFE
+      → import(blobURL)                    执行 ES 模块（React 外置）
       → window.QwenPaw.registerRoutes()    注册路由到控制台侧边栏
 ```
 
@@ -154,7 +154,7 @@ plugins/<plugin-id>/
 |------|------|
 | `id` | 唯一标识，用作目录名和注册名 |
 | `type` | `"frontend"` = 出现在控制台侧边栏；`"general"` = 不显示 |
-| `entry.frontend` | IIFE 构建产物的路径，相对于插件根目录 |
+| `entry.frontend` | ES 模块构建产物的路径，相对于插件根目录 |
 | `entry.backend` | Python 入口文件路径，必须 export `plugin` 对象 |
 | `dependencies` | 声明式依赖列表，UI 展示用。**实际安装**看 `requirements.txt` |
 | `min_version` | 所需的 QwenPaw 最低版本 |
@@ -163,40 +163,198 @@ plugins/<plugin-id>/
 
 ## 4. 后端开发
 
+> **本章节规范** 适用于所有 Bundle 插件（`type: frontend` / `type: general`）。Tool 插件请看 [tools-dev.md](tools-dev.md)。
+
+### 4.0 目录布局（后端部分）
+
+```
+plugins/<plugin-id>/
+├── plugin.py                # 入口：导出 plugin 对象（必需）
+├── requirements.txt         # Python 依赖（UTF-8 无 BOM）
+├── plugin.json              # 元数据（见第 3 章）
+├── app/                     # 模式 B 子进程后端
+│   ├── main.py              # FastAPI 应用 + lifespan
+│   ├── config.py            # Pydantic BaseSettings（必需）
+│   ├── database.py          # aiosqlite 封装
+│   ├── routers/             # APIRouter 集合
+│   │   └── routes.py
+│   └── services/            # 业务逻辑（可选）
+├── routers/                 # 模式 A 路由（与 app/ 平级）
+│   └── routes.py
+├── tools/                   # Agent 工具函数（可选）
+└── skills/<name>/SKILL.md   # Agent 技能（可选）
+```
+
 ### 4.1 入口文件 (plugin.py)
 
-插件后端必须 export 一个 `plugin` 对象，实现 `register(api)` 方法：
+插件后端必须 export 一个 `plugin` 对象，实现 `register(api)` 方法。生命周期：
+
+- `register(api)` 在 **模块 import 时**调用 — 只注册 hook，不做实际工作
+- `_on_startup` 在 **QwenPaw 启动后**调用 — 装 skills、起子进程、init DB
+- `_on_shutdown` 在 **QwenPaw 关闭时**调用 — 关子进程、flush DB
 
 ```python
-# plugin.py
+# -*- coding: utf-8 -*-
+"""<Plugin Name> —— <一句话描述>"""
+
+__all__ = ["plugin"]
+
+import asyncio
 import logging
+import os
+import shutil
+import sys
 from pathlib import Path
 
+from qwenpaw.plugins.api import PluginApi
+
+# 标准 logger 命名：用 __name__，让日志归到正确模块
 logger = logging.getLogger(__name__)
+
 PLUGIN_DIR = Path(__file__).parent
+_PLUGIN_ID = "my-plugin"                 # 必须 = plugin.json.id
+_PLUGIN_SKILLS: tuple[str, ...] = ()     # 有 skills 才填
+_PROCESS_PORT = 7899                     # 模式 B 才用
+
+
+# ── Skill 安装（可选） ──────────────────────────────────
+
+
+def _install_plugin_skills() -> None:
+    """将插件 skills 复制到 ~/.qwenpaw/skill_pool/，并更新 manifest。"""
+    try:
+        from qwenpaw.agents.skill_system import (
+            ensure_skill_pool_initialized,
+            get_skill_pool_dir,
+        )
+    except ImportError:
+        logger.warning("skill_system 不可用，跳过 skill 安装")
+        return
+
+    try:
+        ensure_skill_pool_initialized()
+    except Exception as exc:
+        logger.warning("Skill pool init failed: %s", exc)
+
+    pool_dir = get_skill_pool_dir()
+    for name in _PLUGIN_SKILLS:
+        src = PLUGIN_DIR / "skills" / name
+        dst = pool_dir / name
+        if not src.exists():
+            logger.warning("插件 skill 源缺失: %s", src)
+            continue
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(src, dst)
+    _update_pool_manifest(pool_dir)
+
+
+def _update_pool_manifest(pool_dir: Path) -> None:
+    """把插件 skills 写入 pool 的 skill.json。"""
+    import json
+    manifest_path = pool_dir / "skill.json"
+    try:
+        manifest = (
+            json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest_path.exists()
+            else {"skills": {}, "builtin_skill_names": []}
+        )
+    except Exception as exc:
+        logger.warning("读取 pool manifest 失败: %s", exc)
+        return
+
+    skills = manifest.setdefault("skills", {})
+    for name in _PLUGIN_SKILLS:
+        if (pool_dir / name).exists() and name not in skills:
+            skills[name] = {
+                "source": f"plugin:{_PLUGIN_ID}",
+                "protected": False,
+            }
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+# ── 子进程管理（模式 B 才用） ────────────────────────────
+
+
+def _is_backend_running() -> bool:
+    """健康检查 — 复用 httpx 已有依赖即可。"""
+    import httpx
+    try:
+        return httpx.get(
+            f"http://127.0.0.1:{_PROCESS_PORT}/health", timeout=2,
+        ).status_code == 200
+    except Exception:
+        return False
+
+
+async def _ensure_backend() -> None:
+    """启动 FastAPI 子进程（幂等）。"""
+    if _is_backend_running():
+        logger.info("[%s] backend already running", _PLUGIN_ID)
+        return
+
+    app_main = PLUGIN_DIR / "app" / "main.py"
+    if not app_main.exists():
+        logger.warning("[%s] app/main.py 不存在，后端未启动", _PLUGIN_ID)
+        return
+
+    logger.info("[%s] starting backend on port %d", _PLUGIN_ID, _PROCESS_PORT)
+    env = os.environ.copy()
+    # env 用 <PLUGIN>_PORT 前缀，避免多插件冲突
+    env[f"{_PLUGIN_ID.upper().replace('-', '_')}_PORT"] = str(_PROCESS_PORT)
+
+    proc = await asyncio.subprocess.create_subprocess_exec(
+        sys.executable, "-m", "app.main",       # 使用同一 Python
+        cwd=str(PLUGIN_DIR),
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    # 等 uvicorn 起来；正式判定用 _is_backend_running()
+    await asyncio.sleep(2)
+
+
+# ── Plugin 入口 ──────────────────────────────────────────
 
 
 class MyPlugin:
-    def register(self, api):
-        """注册钩子 — 在 QwenPaw 启动时执行"""
+    def register(self, api: PluginApi) -> None:
+        """注册钩子、路由、工具 — 仅在 import 时执行。"""
+        # 模式 A：同进程 HTTP 路由
+        # from routers.routes import router
+        # api.register_http_router(router, prefix=f"/{_PLUGIN_ID}", tags=[_PLUGIN_ID])
+
+        # 可选：注册 Agent 工具
+        # from tools.my_tool import my_tool
+        # api.register_tool(tool_name="my_tool", tool_func=my_tool,
+        #                   description="...", icon="🛠️")
+
         api.register_startup_hook(
-            hook_name="my_plugin_init",
+            hook_name=f"{_PLUGIN_ID}_startup",
             callback=self._on_startup,
             priority=50,
         )
         api.register_shutdown_hook(
-            hook_name="my_plugin_cleanup",
+            hook_name=f"{_PLUGIN_ID}_shutdown",
             callback=self._on_shutdown,
             priority=50,
         )
+        logger.info("[%s] plugin registered", _PLUGIN_ID)
 
-    async def _on_startup(self):
-        """初始化：装 skills、启动子进程等"""
-        ...
+    async def _on_startup(self) -> None:
+        logger.info("[%s] starting up", _PLUGIN_ID)
+        # 1. 装 skills（如果有）
+        if _PLUGIN_SKILLS:
+            _install_plugin_skills()
+        # 2. 模式 B：起子进程
+        # await _ensure_backend()
 
-    async def _on_shutdown(self):
-        """清理"""
-        ...
+    async def _on_shutdown(self) -> None:
+        logger.info("[%s] shutting down", _PLUGIN_ID)
+
 
 plugin = MyPlugin()
 ```
@@ -206,8 +364,6 @@ plugin = MyPlugin()
 `register(api)` 收到的 `api` 参数提供以下注册方法：
 
 ```python
-# src/qwenpaw/plugins/api.py
-
 api.register_startup_hook(hook_name, callback, priority)     # 启动钩子
 api.register_shutdown_hook(hook_name, callback, priority)     # 关闭钩子
 api.register_http_router(router, prefix, tags)                # FastAPI 路由
@@ -216,80 +372,139 @@ api.register_tool(tool_name, tool_func, description, ...)     # Agent 工具
 api.register_control_command(handler, priority_level)         # 控制命令
 ```
 
-### 4.3 后端子进程
+### 4.3 配置管理（Pydantic BaseSettings — 必需）
 
-插件通常以子进程方式启动独立的 FastAPI 服务：
-
-```python
-# plugin.py
-def _start_backend_async():
-    app_main = PLUGIN_DIR / "app" / "main.py"
-    env = os.environ.copy()
-    env["MY_PLUGIN_PORT"] = str(7899)
-
-    return asyncio.subprocess.create_subprocess_exec(
-        sys.executable, "-m", "app.main",       # 使用同一 Python
-        cwd=str(PLUGIN_DIR),
-        env=env,
-    )
-
-
-def _is_backend_running():
-    """健康检查"""
-    import httpx
-    resp = httpx.get("http://localhost:7899/health", timeout=2)
-    return resp.status_code == 200
-```
-
-**关键**：使用 `sys.executable` 而非硬编码 `python3`，确保与 QwenPaw 使用同一解释器，已安装的依赖可直接使用。
-
-### 4.4 依赖管理
-
-插件系统的依赖管理在 `loader.py:345-450`：
+**统一用 Pydantic BaseSettings**，不要再用 `os.getenv` 散写。配置可被环境变量和 `.env` 双重覆盖。
 
 ```python
-# loader.py:521-528 — 自动检测 requirements.txt
-requirements_file = target_dir / "requirements.txt"
-if requirements_file.exists():
-    await asyncio.to_thread(
-        self._install_requirements,
-        requirements_file,
-        plugin_id,
+# app/config.py
+"""<插件名> 配置"""
+
+from pathlib import Path
+
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+class Settings(BaseSettings):
+    """所有配置用 env_prefix 防止与全局环境变量冲突。"""
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        env_prefix="MY_PLUGIN_",            # 防止与环境变量冲突
+        extra="ignore",
+        populate_by_name=True,
     )
+
+    # ── Server ──
+    host: str = "127.0.0.1"
+    port: int = 7899
+
+    # ── Storage ──
+    data_dir: str = str(Path.home() / ".qwenpaw" / "data" / "my-plugin")
+    db_path: str = ""                      # 由 model_validator 派生
+
+    # ── 第三方 API（用 AliasChoices 兼容两种命名） ──
+    api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("API_KEY", "MY_PLUGIN_API_KEY"),
+    )
+
+    def model_post_init(self, __context) -> None:  # type: ignore[override]
+        # pydantic v2：用 __setattr__ 避免 frozen；或用 computed_field
+        if not self.db_path:
+            object.__setattr__(
+                self, "db_path", str(Path(self.data_dir) / "my-plugin.db"),
+            )
+
+
+settings = Settings()
 ```
 
-安装策略（`_install_requirements`）：
+**关键约束**：
+- 统一用 `env_prefix="<PLUGIN_ID>_"`，避免与 QwenPaw 主进程环境变量冲突
+- **DB 路径必须** = `~/.qwenpaw/data/<plugin-id>.db`（PyInstaller 打包后插件目录只读）
 
-1. **优先** `python -m pip install -r requirements.txt`
-2. **回退** `uv pip install --python <sys.executable> -r requirements.txt`（当 pip 不存在时）
+### 4.4 数据库（统一用 aiosqlite）
 
-> **注意**：只识别 `requirements.txt`，`pyproject.toml` 中的 `[project]dependencies` 不会被自动安装。
+**所有 Bundle 插件的数据库都用 `aiosqlite`**，不要用同步 `sqlite3`。
 
-### 4.5 前端 API 通信模式
+理由：FastAPI 是异步的，路由函数默认跑在事件循环里；同步 sqlite 调用会阻塞事件循环，并发请求会卡死。同步 sqlite + `check_same_thread=False` 只是把崩溃推迟，并发场景下依然会损坏。
 
-前端 `dist/index.js` 通过直接 HTTP 请求与后端子进程通信：
+```python
+# app/database.py
+"""<插件名> 数据库"""
 
-```typescript
-const API_BASE = "http://localhost:7899";
+import json
+import logging
+from pathlib import Path
+from typing import Any, Optional
 
-async function api(method: string, url: string, body?: unknown) {
-  const res = await fetch(`${API_BASE}${url}`, { method, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(...);
-  return res.json();
-}
+import aiosqlite
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+async def get_db() -> aiosqlite.Connection:
+    """获取数据库连接 — 调用方负责 close。"""
+    Path(settings.db_path).parent.mkdir(parents=True, exist_ok=True)
+    db = await aiosqlite.connect(settings.db_path, timeout=30.0)
+    db.row_factory = aiosqlite.Row
+    return db
+
+
+async def init_db() -> None:
+    """启动时建表。"""
+    db = await get_db()
+    try:
+        await db.executescript("""
+            CREATE TABLE IF NOT EXISTS items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_items_name ON items(name);
+        """)
+        await db.commit()
+        logger.info("database initialized: %s", settings.db_path)
+    finally:
+        await db.close()
+
+
+# ── CRUD 示例 ──
+
+async def list_items(keyword: str = "", limit: int = 50) -> list[dict[str, Any]]:
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM items WHERE name LIKE ? ORDER BY id DESC LIMIT ?",
+            (f"%{keyword}%", limit),
+        )
+        return [dict(r) for r in await cursor.fetchall()]
+    finally:
+        await db.close()
 ```
 
-后端子进程监听 `127.0.0.1:7899`，和 QwenPaw 主进程 (`:18006`) 独立。
+### 4.5 模式 A vs 模式 B 决策树
 
-### 4.6 三种路由注册模式
+```
+插件需要提供 API？
+├─ API 很简单（CRUD / 状态查询 / 配置读写）
+│   └─ ✅ 模式 A：register_http_router（同进程，零网络开销）
+│
+├─ API 有重型依赖（psutil、whisper、FFmpeg、模型推理）
+│   └─ ✅ 模式 B：子进程（独立端口，从 7899 顺延）
+│
+└─ 需要在 QwenPaw 启动后动态注册路由
+    └─ ⚠️ 模式 C：手动注入（仅兼容遗留插件，新插件禁止用）
+```
 
-根据插件需求不同，后端 API 有三种注册方式：
-
----
-
-#### 模式 A：`register_http_router` —— 同进程注册（推荐）
-
-将 FastAPI `APIRouter` 直接挂载到 QwenPaw 主进程，**同进程**，零网络开销。
+#### 模式 A：`register_http_router`（推荐）
 
 ```python
 # plugin.py
@@ -297,77 +512,64 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 @router.get("/status")
 def status():
     return {"ok": True}
 
+
 class MyPlugin:
     def register(self, api):
+        # prefix 统一用 /<plugin-id>，主进程会自动加 /api
         api.register_http_router(router, prefix="/my-plugin", tags=["my-plugin"])
-
-plugin = MyPlugin()
 ```
 
 | 特点 | 说明 |
 |------|------|
 | 进程 | QwenPaw 主进程内，同进程 |
-| 端口 | 复用 QwenPaw `:18006` |
-| 前端访问 | `host.getApiUrl("/my-plugin/status")` |
-| 适用场景 | 轻量 CRUD、配置读写、状态查询 |
-| 示例插件 | `qwenpaw-pet` |
+| 端口 | 复用 QwenPaw `:18006`，前端走 `host.getApiUrl("/my-plugin/...")` |
+| 适用场景 | 轻量 CRUD、状态查询、配置读写 |
+| 参考插件 | `qwenpaw-pet` / `todo` |
 
----
+#### 模式 B：子进程独立 FastAPI（重型任务）
 
-#### 模式 B：子进程独立 FastAPI 服务 —— 隔离运行
+端口从 `7899` 开始顺延（`7899 → 7900 → 7901 → ...`），**禁止占用主进程 `:18006`**。
 
-插件启动独立 FastAPI 子进程，**不同进程**，通过独立端口通信。
+模式 B 插件的子进程**端口必须**用 `env_prefix` 化的环境变量（见 4.1 节），避免多插件相互覆盖 `PORT`。
 
-```python
-# plugin.py
-import asyncio, os, sys
-from pathlib import Path
+env var 命名约定：`<PLUGIN_ID_UPPER>_PORT`，例如 `MY_PLUGIN_PORT=7899`。
 
-PLUGIN_DIR = Path(__file__).parent
-_PROCESS_PORT = 7899
+#### 模式 C：手动注入运行中 App
 
-def _is_backend_running() -> bool:
-    import httpx
-    try:
-        resp = httpx.get(f"http://localhost:{_PROCESS_PORT}/health", timeout=2)
-        return resp.status_code == 200
-    except Exception:
-        return False
+⚠️ **新插件禁止用**。仅兼容 `cloudpaw` 这类历史遗留，依赖 QwenPaw 内部 API（`_instances` / `_app`），升级时易失效。
 
-async def _ensure_backend():
-    if _is_backend_running():
-        return
-    proc = await asyncio.subprocess.create_subprocess_exec(
-        sys.executable, "-m", "app.main",
-        cwd=str(PLUGIN_DIR),
-        env={**os.environ, "PORT": str(_PROCESS_PORT)},
-    )
+如需了解，见 4.7 节的"模式 C 参考"。
+
+### 4.6 依赖管理
+
+**`requirements.txt` 与 `plugin.json.dependencies` 必须严格对齐**，只在一处维护，每次发布前 diff。
+
+| 文件 | 用途 |
+|------|------|
+| `requirements.txt` | 实际安装 — loader 自动 `pip install -r` |
+| `plugin.json.dependencies` | UI 展示，**不要漏** |
+
+**BOM 必检**：`requirements.txt` 必须是 UTF-8 **无 BOM**。BOM（`EF BB BF` 三个隐藏字节）会导致 `str.strip()` 删不掉，第一行依赖被静默跳过。
+
+```bash
+# 检测 BOM
+head -c 3 requirements.txt | xxd | grep "efbb bf" && echo "有BOM" || echo "无BOM"
+# 移除 BOM
+sed -i '1s/^\xEF\xBB\xBF//' requirements.txt
 ```
 
-| 特点 | 说明 |
-|------|------|
-| 进程 | 独立子进程，与 QwenPaw 隔离 |
-| 端口 | 独立端口，建议从 `7899` 开始顺延 |
-| 前端访问 | 直连 `http://localhost:{PORT}` |
-| 适用场景 | 重型任务：音视频转码、模型推理、大文件处理 |
-| 示例插件 | `data-processor` |
+### 4.7 模式 C 参考（仅遗留插件）
 
-> **端口分配**：为避免冲突，新插件按顺序使用端口：`data-processor=7899`，下一个 `=7900`，依此类推。
-
----
-
-#### 模式 C：手动注入运行中 App —— 在 QwenPaw 启动后注册
-
-在 startup hook 中查找 QwenPaw 的 FastAPI 实例，手动挂载路由。需要处理 SPA catch-all 路由冲突。
+> ⚠️ 本节描述的是**遗留模式**，新插件**不要使用**。阅读本节仅用于维护 `cloudpaw` 等历史插件。
 
 ```python
 # routers_setup.py
 def _inject_routers(routers: list) -> None:
-    # 获取 QwenPaw 的 FastAPI app 实例
     from agentscope_runtime.engine.app import AgentApp
     agent_app = AgentApp._instances.get(AgentApp)
     app = agent_app.app
@@ -375,193 +577,323 @@ def _inject_routers(routers: list) -> None:
     for router in routers:
         app.include_router(router, prefix="/api")
 
-    # 将 SPA catch-all `/{full_path:path}` 移到路由表末尾
+    # 关键：把 SPA catch-all `/{full_path:path}` 移到路由表末尾
     for i, r in enumerate(app.routes):
         if getattr(r, "path", "") == "/{full_path:path}":
             route = app.routes.pop(i)
             app.routes.append(route)
 
-    # 重建中间件栈
+    # 重建中间件栈，让新路由生效
     app.middleware_stack = None
 ```
 
-| 特点 | 说明 |
-|------|------|
-| 进程 | QwenPaw 主进程内，同进程 |
-| 复杂度 | 高，需手动处理 catch-all 和中间件栈 |
-| 风险 | 依赖内部 API（`_instances`、`_app`），QwenPaw 升级可能失效 |
-| 适用场景 | 历史遗留插件，不推荐新插件使用 |
-| 示例插件 | `cloudpaw` |
+### 5. 前端开发
 
----
+> **本章节规范** 适用于所有有 UI 的 Bundle 插件（`type: frontend`）。`type: general` 插件无前端可跳过。
 
-#### 模式选择决策树
+#### 5.0 目录布局
 
 ```
-插件需要提供 API？
-├─ API 很简单（CRUD / 状态查询）
-│   └─ ✅ 模式 A：register_http_router
-├─ API 有重型依赖（模型推理 / 转码 / FFmpeg）
-│   └─ ✅ 模式 B：子进程（独立端口）
-└─ 需要在 QwenPaw 启动后动态注册路由
-    └─ ⚠️ 模式 C：手动注入（仅兼容遗留插件）
+plugins/<plugin-id>/
+└── frontend/                # 前端源码目录（统一命名，禁 ui/）
+    ├── package.json         # npm 依赖
+    ├── tsconfig.json        # TS 配置
+    ├── vite.config.ts       # Vite 配置
+    └── src/
+        ├── index.tsx        # 入口（注册路由 + 暴露插件类）
+        ├── pages/           # 页面组件
+        │   └── MyPage.tsx
+        ├── api.ts           # API 封装（用 host.getApiUrl + authHeaders）
+        ├── types.ts         # 业务类型
+        └── qwenpaw-host.d.ts  # 宿主 window.QwenPaw 类型声明（必需）
+
+frontend/dist/index.js       # ★ 构建产物（plugin.json entry.frontend 指向它）
 ```
 
-#### 端口规范速查
-
-| 插件 | 模式 | 端口 |
-|------|------|------|
-| QwenPaw 主进程 | — | `18006` |
-| data-processor | 子进程 | `7899` |
-| 下一个子进程插件 | 子进程 | `7900` |
-| ... | ... | 顺延 |
-
-### 5.1 加载机制
+#### 5.1 加载机制
 
 ```typescript
-// console/src/plugins/usePluginLoader.ts:39-58
+// console/src/plugins/usePluginLoader.ts
 async function executePluginScript(entryUrl: string): Promise<void> {
-  const jsText = await response.text();             // 文本获取
+  const jsText = await response.text();
   const blobUrl = URL.createObjectURL(
     new Blob([jsText], { type: "application/javascript" }),
   );
-  await import(/* @vite-ignore */ blobUrl);          // 动态 import 执行
+  await import(/* @vite-ignore */ blobUrl);   // 动态 import 执行
   URL.revokeObjectURL(blobUrl);
 }
 ```
 
-所以：**插件是一个自包含的 `.js` 文件**，通过 `import(blobURL)` 执行，所有代码必须打包在一起（IIFE）。
+所以：**插件是一个 ES 模块 `.js` 文件**，通过 `import(blobURL)` 执行，**React 不打包进去**——必须外置（`external: ["react", "react-dom"]`），由宿主 `window.React` 注入。
 
-### 5.2 开发环境
+#### 5.2 package.json 最小依赖
 
 ```json
-// frontend/package.json — 最小依赖
 {
+  "name": "<plugin-id>-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "format": "tsc --noEmit && prettier --write --cache .",
+    "format:check": "tsc --noEmit && prettier --check ."
+  },
   "devDependencies": {
-    "vite": "^6.0.0",
-    "typescript": "^5.0.0"
+    "@types/react": "^18.3.3",
+    "@vitejs/plugin-react": "^4.3.1",
+    "prettier": "3.0.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.2"
   }
 }
 ```
 
-`@vitejs/plugin-react` 不需要，因为不能使用 JSX（会导致 React 被打包进来）。
+> **必装** `@vitejs/plugin-react` 和 `@types/react`——新规范下 JSX 是一等公民。
 
-### 5.3 Vite 构建配置
+#### 5.3 Vite 构建配置（统一标准）
 
 ```typescript
-// vite.config.plugin.ts
-import { defineConfig } from "vite";
+// frontend/vite.config.ts
+import react from "@vitejs/plugin-react";
 import { resolve } from "path";
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  resolve: {
-    alias: { "@": resolve(__dirname, "src") },
-  },
-  define: {
-    "process.env.NODE_ENV": JSON.stringify("production"),
-  },
+  plugins: [react({ jsxRuntime: "classic" })],   // ← 关键
+  resolve: { alias: { "@": resolve(__dirname, "src") } },
   build: {
     lib: {
-      entry: resolve(__dirname, "src/plugin-entry.ts"),
-      name: "MyPlugin",
-      formats: ["iife"],
+      entry: resolve(__dirname, "src/index.tsx"),
+      formats: ["es"],                            // ← ES 模块，不打包 React
       fileName: () => "index.js",
     },
+    outDir: resolve(__dirname, "dist"),           // ← 产物到 frontend/dist/
+    emptyOutDir: true,
     rollupOptions: {
-      external: [],           // 不 external，但也不 import 外部库
-      output: {
-        inlineDynamicImports: true,
-      },
+      external: ["react", "react-dom"],           // ← 外置宿主 React
     },
-    minify: false,
+    minify: false,                                // 调试友好
     sourcemap: true,
   },
 });
 ```
 
-### 5.4 入口文件模板
+#### 5.4 tsconfig.json
 
-```typescript
-// plugin-entry.ts — 自包含，零外部 import
-import type { SomeType } from "./api/types";    // type-only 编译期擦除
-
-const host = window.QwenPaw.host;
-const React = host.React;
-const antd = host.antd;
-const antdIcons = (window as any).antdIcons || {};
-
-function MyPage() {
-  const [data, setData] = React.useState([]);
-  // ... 全部使用 React.useXxx / antd.Button / antdIcons.xxx
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react",                               // ← 必须 react，不是 preserve
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": []                                   // ← 关键：避免 React 全局冲突
+  },
+  "include": ["src"]
 }
-
-function PluginRoot() {
-  const [tab, setTab] = React.useState("main");
-  // ... 用 state 做 tab 切换，不用 react-router
-}
-
-window.QwenPaw.registerRoutes?.("my-plugin", [{
-  path: "/plugin/my-plugin",
-  component: PluginRoot,
-  label: "My Plugin",
-  icon: "🔧",
-  priority: 10,
-}]);
 ```
 
-### 5.5 核心限制
+> **`types: []` 必要性**：`@types/react` 会 `export as namespace React` 把 `React` 注册为全局，与 `const React = host.React` 冲突（`Cannot redeclare block-scoped variable 'React'`）。`types: []` 关掉自动注册，宿主类型由 `qwenpaw-host.d.ts` 显式声明。
+
+#### 5.5 宿主类型声明（必需）
+
+```typescript
+// frontend/src/qwenpaw-host.d.ts
+import type * as ReactNS from "react";
+
+declare global {
+  interface QwenPawHost {
+    React: typeof ReactNS;
+    antd: any;                                 // antd 公开类型太大，结构 any 即可
+    antdIcons?: any;
+    getApiUrl: (path: string) => string;
+    getApiToken: () => string;
+  }
+  interface QwenPawRoute {
+    path: string;
+    component: unknown;
+    label?: string;
+    icon?: string;
+    priority?: number;
+  }
+  interface QwenPawGlobal {
+    host: QwenPawHost;
+    registerRoutes?: (id: string, routes: QwenPawRoute[]) => void;
+    registerToolRender?: (
+      id: string,
+      renderers: Record<string, React.FC<any>>,
+    ) => void;
+  }
+  interface Window { QwenPaw: QwenPawGlobal; }
+}
+export {};
+```
+
+> 不声明这份 d.ts，`host.antd` / `host.getApiUrl` 等会退化成 `any`，宿主 API 漂移时编译器不会报错。
+
+#### 5.6 入口文件模板
+
+```tsx
+// frontend/src/index.tsx
+import type * as ReactNS from "react";
+import { MyPage } from "./pages/MyPage";
+
+const host = window.QwenPaw.host;
+const React: typeof ReactNS = host.React;
+
+class MyPlugin {
+  readonly id = "my-plugin";                  // 必须 = plugin.json.id
+
+  setup(): void {
+    window.QwenPaw.registerRoutes?.(this.id, [{
+      path: "/plugin/my-plugin",
+      component: MyPage,
+      label: "My Plugin",
+      icon: "🛠️",
+      priority: 50,                          // 越小越靠前
+    }]);
+  }
+}
+
+new MyPlugin().setup();
+```
+
+```tsx
+// frontend/src/pages/MyPage.tsx
+import type * as ReactNS from "react";
+import { api } from "../api";
+
+const host = window.QwenPaw.host;
+const React: typeof ReactNS = host.React;
+const { Card, Table, Button, message } = host.antd;
+
+export function MyPage() {
+  const [items, setItems] = React.useState<Item[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const refresh = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.get<{ items: Item[] }>("/my-plugin/items");
+      setItems(data.items);
+    } catch (e: any) {
+      message.error(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => { void refresh(); }, [refresh]);
+
+  return (
+    <Card title="My Items">
+      <Table rowKey="id" loading={loading} dataSource={items}
+             columns={[
+               { title: "Name", dataIndex: "name" },
+               { title: "Action", render: (_, r) =>
+                 <Button onClick={() => api.delete(`/my-plugin/items/${r.id}`).then(refresh)}>
+                   Delete
+                 </Button> },
+             ]} />
+    </Card>
+  );
+}
+```
+
+#### 5.7 API 封装（统一标准）
+
+```typescript
+// frontend/src/api.ts
+function getSelectedAgentId(): string | null {
+  try {
+    const raw =
+      window.sessionStorage?.getItem("qwenpaw-agent-storage") ??
+      window.localStorage?.getItem("qwenpaw-agent-storage");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const selected = parsed?.state?.selectedAgent;
+    return typeof selected === "string" && selected ? selected : null;
+  } catch {
+    return null;
+  }
+}
+
+export function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const t = window.QwenPaw.host.getApiToken?.();
+  if (t) headers.Authorization = `Bearer ${t}`;
+  const agentId = getSelectedAgentId();
+  if (agentId) headers["X-Agent-Id"] = agentId;
+  return headers;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(window.QwenPaw.host.getApiUrl(path), {
+    ...init,
+    headers: { ...init?.headers, ...authHeaders() },
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+export const api = {
+  get:    <T>(p: string) => request<T>(p),
+  post:   <T>(p: string, body: unknown) =>
+    request<T>(p, { method: "POST",  headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  patch:  <T>(p: string, body: unknown) =>
+    request<T>(p, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  delete: <T>(p: string) => request<T>(p, { method: "DELETE" }),
+};
+```
+
+**约束**：
+- 永远用 `host.getApiUrl` + `host.getApiToken`，**禁止硬编码 URL**（如 `http://localhost:7900`）
+- 模式 A：直接走 `getApiUrl("/my-plugin/...")`，宿主主进程 `:18006` 处理
+- 模式 B：把子进程路由桥接到主进程（`register_http_router(router, prefix="/my-plugin")`），前端仍走 `getApiUrl`
+- 模式 B 子进程裸跑（不桥接）时仍要 `authHeaders` + 透传，否则 dev 之外环境鉴权失败
+
+#### 5.8 核心限制
 
 | 限制 | 原因 | 解决方案 |
 |------|------|---------|
-| 不能 `import React from "react"` | 没有 `node_modules`，打包会包含两份 React 导致 `$typeof` 冲突 | 从 `window.QwenPaw.host.React` 获取 |
-| 不能使用 JSX | `@vitejs/plugin-react` 会引入 React 运行时 | 用 `React.createElement` |
-| 不能嵌套 `<Router>` | 控制台已是 React Router v7 环境 | 用 state 做 tab 切换，不用 `useNavigate` |
-| 所有代码打一个文件 | `import(blobURL)` 只能加载一个 entry | IIFE 格式 + `inlineDynamicImports: true` |
-| 不能动态加载额外资源 | 只有一个 `.js` 文件 | 所有 CSS 内联、所有图片转 base64 |
-| 图标只能用 antdIcons 或 Unicode | 无字体文件加载 | `const { SettingOutlined } = antdIcons` |
+| 不能 `import React from "react"` | 宿主已经有一份 React，再 import 会双 `$typeof` 冲突（Minified React error #31） | `const React: typeof ReactNS = host.React` |
+| 不能 `import { Button } from "antd"` | 同上 | `const { Button } = host.antd` |
+| 不能 `import { SettingOutlined } from "@ant-design/icons"` | 同上 | `const { SettingOutlined } = host.antdIcons` |
+| 不能嵌套 `<Router>` | 宿主已是 React Router v7 | `useState` 做 tab 切换，不用 `useNavigate` |
+| 不能用 `process.env` / `import.meta.env` | 插件通过 `import(blobURL)` 执行，`import.meta` 不存在 | 硬编码或 vite `define` 替换 |
+| 不能动态加载额外 JS/CSS/字体 | 只有一个 ES 文件 | 所有 CSS 内联、图片转 base64 |
+| 不能 `new` 路由/重写 | 路由由宿主 React Router 控制 | 只能用 `registerRoutes` 追加 |
 
-### 5.6 可用宿主资源
+#### 5.9 注册路由
+
+```typescript
+window.QwenPaw.registerRoutes?.(pluginId, [{
+  path: "/plugin/plugin-id",     // 必须以 /plugin/ 开头
+  component: PageComponent,
+  label: "侧边栏显示名",
+  icon: "⚙️",                    // emoji 或 antdIcons 名称
+  priority: 10,                  // 越小越靠前
+}]);
+```
+
+`registerRoutes` 是**可选链**（`?.`）—— 宿主未挂载 `window.QwenPaw` 时不应崩溃。
+
+#### 5.10 可用宿主资源
 
 ```typescript
 window.QwenPaw.host = {
   React,              // React 全量
   antd,               // Ant Design 全量
   antdIcons,          // @ant-design/icons 全量
-  ReactRouterDOM,     // react-router-dom（仅用于 Link/useNavigate 慎用）
+  ReactRouterDOM,     // react-router-dom（慎用：宿主已用 React Router v7）
   apiBaseUrl,         // QwenPaw API base URL
   getApiUrl,          // API URL 构造函数
   getApiToken,        // 获取认证 token
 };
-
-// 同时也挂在 window 上供 rollup globals 引用：
-window.React
-window.antd
-window.ReactRouterDOM
-window.antdIcons
-```
-
-### 5.7 注册路由
-
-```typescript
-window.QwenPaw.registerRoutes?.("plugin-id", [{
-  path: "/plugin/plugin-id",
-  component: PageComponent,
-  label: "侧边栏显示名",
-  icon: "⚙️",
-  priority: 10,       // 越小越靠前
-}]);
-```
-
-### 5.8 UI 组件注意
-
-Ant Design 的 `Form.useForm()` / `Form.useWatch()` / `Modal` / `Table` 等均从 `antd` 对象获取，和正常 React 开发完全一致，只需注意用 `React.createElement` 写：
-
-```typescript
-// ❌ JSX（不支持）
-return <Button type="primary">点击</Button>;
-
-// ✅ React.createElement
-return React.createElement(Button, { type: "primary" }, "点击");
 ```
 
 ---
@@ -655,7 +987,7 @@ Skills 的安装发生在 **QwenPaw 启动时**的 startup hook 中（`_on_start
 ```bash
 cd plugins/<plugin-id>/frontend
 npm install
-npx vite build --config vite.config.ts
+npm run build
 # 输出: frontend/dist/index.js
 ```
 
@@ -694,9 +1026,12 @@ qwenpaw app --port 18006
 
 ### Q1: `Minified React error #31` / `Cannot read properties of null (reading 'useRef')`
 
-**原因**：插件打包了自己的 React，与宿主的 React 冲突，`$typeof` Symbol 不匹配。
+**原因**：插件打包了自己的 React（或 antd），与宿主的 React 冲突，`$typeof` Symbol 不匹配。
 
-**解决**：确保插件不 `import React from "react"`，全部从 `window.QwenPaw.host.React` 获取。
+**解决**：
+1. 检查 `vite.config.ts` 是否设置 `external: ["react", "react-dom"]`
+2. 源码全部从 `host.React` / `host.antd` 取，**禁止** `import React from "react"`、`import { Button } from "antd"`
+3. 入口用 `import type * as ReactNS from "react"`（仅类型）
 
 ### Q2: `You cannot render a <Router> inside another <Router>`
 
@@ -704,23 +1039,22 @@ qwenpaw app --port 18006
 
 **解决**：用 state 做 tab 切换，不要用任何 Router 组件：
 
-```typescript
+```tsx
 const [tab, setTab] = React.useState("files");
-// 用条件渲染替代路由
 const content = tab === "files" ? <FileList /> : <Settings />;
 ```
 
 ### Q3: `ReferenceError: process is not defined`
 
-**原因**：Vite 构建时 `process.env.NODE_ENV` 未被替换，浏览器中 `process` 不存在。
+**原因**：打包时 `process.env.NODE_ENV` 未被替换，浏览器中 `process` 不存在。常见于引入了带 Node 全局的 npm 库（如 polyfill 库）。
 
-**解决**：在 vite 配置中添加 `define: { "process.env.NODE_ENV": JSON.stringify("production") }`。
+**解决**：在 vite 配置中添加 `define: { "process.env.NODE_ENV": JSON.stringify("production") }`，或换不带 Node 假设的库。
 
 ### Q4: `import.meta.env` is not available
 
-**原因**：插件通过 IIFE + blob URL 加载，`import.meta` 不可用。
+**原因**：插件通过 `import(blobURL)` 加载，`import.meta` 在 blob 模块上下文中不可用。
 
-**解决**：硬编码 API 地址或在 vite config 中用 `define` 替换。
+**解决**：硬编码 API 地址；或在 vite config 中用 `define: { __MY_VAR__: JSON.stringify("...") }` 替换。
 
 ### Q5: 插件不出现在侧边栏
 
@@ -758,11 +1092,13 @@ const content = tab === "files" ? <FileList /> : <Settings />;
 | `src/qwenpaw/plugins/api.py` | PluginApi：插件可用的全部注册 API |
 | `src/qwenpaw/plugins/registry.py` | PluginRegistry：运行时注册中心 |
 | `console/src/plugins/hostExternals.ts` | 宿主依赖暴露给插件 |
-| `console/src/plugins/usePluginLoader.ts` | 前端加载和执行插件 IIFE |
-| `plugins/data-processor/plugin.py` | 子进程模式后端示例 |
-| `plugins/data-processor/app/main.py` | 子进程独立 FastAPI 应用 |
-| `plugins/data-processor/frontend/src/plugin-entry.ts` | 完整插件前端示例 |
-| `plugins/qwenpaw-pet/plugin.py` | `register_http_router` 模式示例 |
-| `plugins/qwenpaw-pet/router.py` | FastAPI APIRouter 定义示例 |
-| `plugins/cloudpaw/routers_setup.py` | 手动注入路由模式示例 |
+| `console/src/plugins/usePluginLoader.ts` | 前端加载和执行插件 ES 模块 |
+| `plugins/bundle/qwenpaw-pet/plugin.py` | `register_http_router` 模式示例（推荐） |
+| `plugins/bundle/qwenpaw-pet/router.py` | FastAPI APIRouter 定义示例 |
+| `plugins/bundle/qwenpaw-pet/frontend/src/index.tsx` | 完整插件前端示例（ES + JSX + 外置 React） |
+| `plugins/bundle/qwenpaw-pet/frontend/src/qwenpaw-host.d.ts` | 宿主 window.QwenPaw 类型声明示例 |
+| `plugins/bundle/media-studio/plugin.py` | 模式 B 子进程后端示例 |
+| `plugins/bundle/media-studio/app/main.py` | 子进程独立 FastAPI 应用 |
+| `plugins/bundle/todo/plugin.py` | 模式 A + aiosqlite 同步 CRUD 示例 |
+| `plugins/bundle/cloudpaw/routers_setup.py` | 模式 C 手动注入路由示例（仅遗留） |
 | `plugins/tool/wan27/plugin.json` | tool 类型插件示例 |

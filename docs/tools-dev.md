@@ -600,6 +600,45 @@ def text_to_video_wan(prompt: str, resolution: str = "720P") -> ToolResponse:
 - 用户去插件设置页面手动启用工具
 - 检查启动日志是否有 `Registered tool function` 日志
 
+### Q2 (共用): `requirements.txt` 第一行依赖永远不生效
+
+**原因**：`requirements.txt` 文件开头包含 UTF-8 BOM（`EF BB BF` 三个隐藏字节），`str.strip()` 删不掉 BOM，导致 `Requirement('﻿fastapi==...')` 解析失败后被 `except Exception: continue` 静默跳过。
+
+**症状**：插件反复尝试安装依赖，或提示 "Plugin loader is not ready yet"。
+
+**解决**：用支持 UTF-8 无 BOM 的编辑器（如 VS Code）重新保存 `requirements.txt`，或手动删除文件首部的 BOM 字符：
+
+```bash
+# 检测
+head -c 3 requirements.txt | xxd | grep "efbb bf" && echo "有BOM" || echo "无BOM"
+# 移除
+sed -i '1s/^\xEF\xBB\xBF//' requirements.txt
+```
+
+### Q3 (共用): `TypeError: 'typing.Self' is not valid as a type annotation`
+
+**原因**：QwenPaw 仍使用 Python 3.10，`typing.Self` / `types.SelfType` 仅在 Python 3.11+ 可用。
+
+**解决**：
+```python
+# ❌ Python 3.11+
+from typing import Self
+def my_method(self) -> Self: ...
+
+# ✅ Python 3.10 兼容
+from typing import TypeVar
+T = TypeVar("T", bound="MyClass")
+def my_method(self) -> "MyClass": ...
+```
+
+### Q4 (共用): `requirements.txt` 与 `plugin.json.dependencies` 漂移
+
+**原因**：两处单独维护，时间一长容易出现"代码 import 但 requirements 没装"或"装了但 plugin.json 没声明 UI 看不见"。
+
+**解决**：
+- 每次发布前 diff 两文件包名
+- 在 CI 加自动检查（grep `requirements.txt` 的包名是否都出现在 `dependencies`）
+
 ### Q2: Agent 调用工具时报参数错误
 
 **原因**：函数的 docstring 和类型注解会被解析为 function calling schema。如果参数名/描述模糊，Agent 会传错参数。
