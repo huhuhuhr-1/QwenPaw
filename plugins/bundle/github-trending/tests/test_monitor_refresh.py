@@ -55,3 +55,14 @@ def test_diff_returns_meta_update_on_description_change():
     new = {"stars": 100, "forks": 10, "language": "Python", "description": "B"}
     events = monitor_refresh.diff_watch_log(old, new, threshold=5)
     assert any(e["type"] == "repo_meta_update" for e in events)
+
+
+def test_parse_count_handles_abbreviated_formats():
+    from app.monitor_refresh import _parse_count
+    assert _parse_count("1,234") == 1234
+    assert _parse_count("1.2k") == 1200
+    assert _parse_count("3.4K") == 3400
+    assert _parse_count("1.5m") == 1_500_000
+    assert _parse_count("2.0b") == 2_000_000_000
+    assert _parse_count("") == 0
+    assert _parse_count("not a number") == 0

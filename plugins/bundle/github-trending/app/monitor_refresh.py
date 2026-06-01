@@ -28,6 +28,32 @@ REQUEST_TIMEOUT_SEC = 20
 STARS_CHANGE_THRESHOLD = 5
 
 
+def _parse_count(text: str) -> int:
+    """Parse a count string like '1,234' or '1.2k' or '3.4m' to int."""
+    text = text.strip().replace(",", "")
+    if not text:
+        return 0
+    if text.isdigit():
+        return int(text)
+    # Handle abbreviated format: 1.2k, 3.4m, 5.6b
+    multipliers = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}
+    if text[-1].lower() in multipliers:
+        try:
+            num = float(text[:-1])
+            return int(num * multipliers[text[-1].lower()])
+        except ValueError:
+            return 0
+    # Try to extract any number from the string as a last resort
+    import re
+    m = re.search(r"[\d.]+", text)
+    if m:
+        try:
+            return int(float(m.group()))
+        except ValueError:
+            return 0
+    return 0
+
+
 def parse_repo_html(html: str, full_name: str) -> Dict[str, Any]:
     """解析 GitHub repo HTML 提取 stars / forks / language / description / last_commit。"""
     soup = BeautifulSoup(html, "lxml")
@@ -55,16 +81,14 @@ def parse_repo_html(html: str, full_name: str) -> Dict[str, Any]:
 
     for a in soup.select("a"):
         href = a.get("href", "") or ""
-        text = a.get_text(strip=True).replace(",", "")
-        if "/stargazers" in href and text.isdigit():
-            info["stars"] = int(text)
+        if "/stargazers" in href:
+            info["stars"] = _parse_count(a.get_text(strip=True))
             break
 
     for a in soup.select("a"):
         href = a.get("href", "") or ""
-        text = a.get_text(strip=True).replace(",", "")
-        if "/network/members" in href and text.isdigit():
-            info["forks"] = int(text)
+        if "/network/members" in href:
+            info["forks"] = _parse_count(a.get_text(strip=True))
             break
 
     rel_time = soup.select_one("relative-time[datetime]")
