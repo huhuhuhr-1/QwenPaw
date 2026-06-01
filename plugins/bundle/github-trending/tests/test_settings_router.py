@@ -13,6 +13,17 @@ def app():
     return app
 
 
+@pytest.fixture(autouse=True)
+def reset_trigger_tasks():
+    """Clean module-level _TRIGGER_TASKS between tests."""
+    from app.routers import settings as r
+    original = dict(r._TRIGGER_TASKS)
+    r._TRIGGER_TASKS.clear()
+    yield
+    r._TRIGGER_TASKS.clear()
+    r._TRIGGER_TASKS.update(original)
+
+
 async def test_get_settings(app):
     with patch("app.routers.settings.get_runtime_settings", new=AsyncMock(return_value={
         "collect_enabled": True, "collect_interval_min": 60,
@@ -34,10 +45,11 @@ async def test_put_settings(app):
 
 
 async def test_trigger_collect_rejects_when_running(app):
+    """When a collect task is running, POST returns 409."""
     from app.routers import settings as r
-    r._TRIGGER_TASKS["existing"] = {"status": "running"}
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        resp = await ac.post("/settings/trigger-collect")
-    # 接受:1) 直接 200 启动新任务 2) 409 拒绝并发
-    assert resp.status_code in (200, 409)
-    r._TRIGGER_TASKS.pop("existing", None)
+    r._TRIGGER_TASKS["existing"] = {"status": "running", "started_at": 0.0}
+    with patch("app.routers.settings.collect_once", new=AsyncMock()):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            resp = await ac.post("/settings/trigger-collect")
+    assert resp.status_code == 409
+    assert "collect already running" in resp.json()["detail"]

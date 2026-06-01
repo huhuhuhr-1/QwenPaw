@@ -21,6 +21,17 @@ _TRIGGER_TASKS: Dict[str, Dict[str, Any]] = {}
 _TRIGGER_LOCK = asyncio.Lock()
 
 
+def _cleanup_old_tasks() -> None:
+    """Evict completed tasks older than 1 hour to bound memory. Keep all running tasks."""
+    if len(_TRIGGER_TASKS) <= 20:
+        return
+    cutoff = time.time() - 3600
+    for tid in list(_TRIGGER_TASKS.keys()):
+        info = _TRIGGER_TASKS[tid]
+        if info.get("status") != "running" and info.get("started_at", 0) < cutoff:
+            del _TRIGGER_TASKS[tid]
+
+
 class SettingsUpdate(BaseModel):
     collect_enabled: Optional[bool] = None
     collect_interval_min: Optional[int] = Field(default=None, ge=1, le=10080)
@@ -62,7 +73,7 @@ async def trigger_collect() -> Dict[str, str]:
 
 @router.get("/trigger-collect/{task_id}")
 async def get_trigger_status(task_id: str) -> Dict[str, Any]:
-    """查手动采集任务状态。"""
+    """查手动采集任务状态。404 表示 task_id 不存在或已被清理。"""
     info = _TRIGGER_TASKS.get(task_id)
     if not info:
         raise HTTPException(status_code=404, detail="task not found")
@@ -81,3 +92,5 @@ async def _run_trigger(task_id: str) -> None:
         _TRIGGER_TASKS[task_id]["status"] = "error"
         _TRIGGER_TASKS[task_id]["error"] = f"{type(e).__name__}: {e}"
         logger.exception("Trigger collect failed: %s", e)
+    finally:
+        _cleanup_old_tasks()
