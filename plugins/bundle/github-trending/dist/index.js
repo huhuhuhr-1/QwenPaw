@@ -1,56 +1,59 @@
-const X = window.QwenPaw.host, oe = X.getApiUrl, F = X.getApiToken;
-function se() {
+const X = window.QwenPaw.host, se = X.getApiUrl, F = X.getApiToken;
+function ce() {
   var g;
-  const r = {}, d = F == null ? void 0 : F();
-  d && (r.Authorization = `Bearer ${d}`);
+  const a = {}, d = F == null ? void 0 : F();
+  d && (a.Authorization = `Bearer ${d}`);
   try {
     const p = sessionStorage.getItem("qwenpaw-agent-storage") || localStorage.getItem("qwenpaw-agent-storage");
     if (p) {
       const c = JSON.parse(p), v = (g = c == null ? void 0 : c.state) == null ? void 0 : g.selectedAgent;
-      v && (r["X-Agent-Id"] = v);
+      v && (a["X-Agent-Id"] = v);
     }
   } catch (p) {
     console.warn("Failed to read selected agent from storage:", p);
   }
-  return r;
+  return a;
 }
-async function z(r, d = {}) {
-  const g = await fetch(oe(r), {
+async function z(a, d = {}) {
+  const g = await fetch(se(a), {
     ...d,
-    headers: { ...se(), ...d.headers ?? {} }
+    headers: { ...ce(), ...d.headers ?? {} }
   });
   if (!g.ok)
     throw new Error(`${g.status} ${await g.text()}`);
   return g.json();
 }
-async function k(r) {
-  return z(r);
+async function k(a) {
+  return z(a);
 }
-async function I(r, d) {
-  return z(r, {
+async function I(a, d) {
+  return z(a, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(d)
   });
 }
-async function ce(r) {
-  return z(r, { method: "DELETE" });
+async function ie(a) {
+  return z(a, { method: "DELETE" });
 }
-async function ie(r, d) {
-  return z(r, {
+async function ge(a, d) {
+  return z(a, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(d)
   });
 }
-function A(r) {
-  return r >= 1e3 ? (r / 1e3).toFixed(1) + "k" : r.toString();
+function Q(a = /* @__PURE__ */ new Date()) {
+  return a.getFullYear() + "-" + String(a.getMonth() + 1).padStart(2, "0") + "-" + String(a.getDate()).padStart(2, "0");
 }
-function Q(r) {
-  const d = /* @__PURE__ */ new Date(), g = new Date(r), p = Math.floor((d.getTime() - g.getTime()) / 1e3);
+function A(a) {
+  return a >= 1e3 ? (a / 1e3).toFixed(1) + "k" : a.toString();
+}
+function U(a) {
+  const d = /* @__PURE__ */ new Date(), g = new Date(a), p = Math.floor((d.getTime() - g.getTime()) / 1e3);
   return p < 60 ? "刚刚" : p < 3600 ? Math.floor(p / 60) + "分钟前" : p < 86400 ? Math.floor(p / 3600) + "小时前" : Math.floor(p / 86400) + "天前";
 }
-const ge = [
+const me = [
   { value: "all", label: "全部语言" },
   { value: "python", label: "Python" },
   { value: "javascript", label: "JavaScript" },
@@ -59,19 +62,19 @@ const ge = [
   { value: "go", label: "Go" },
   { value: "java", label: "Java" },
   { value: "html", label: "HTML" }
-], a = window.QwenPaw.host.React, { Spin: me, Empty: de, Button: he, message: U } = window.QwenPaw.host.antd;
-function j(r) {
-  const d = (/* @__PURE__ */ new Date()).toISOString().split("T")[0], g = new Date(Date.now() - 864e5).toISOString().split("T")[0];
-  return r === d ? `${r} 今天` : r === g ? `${r} 昨天` : r;
+], n = window.QwenPaw.host.React, { Spin: de, Empty: he, Button: ue, message: j } = window.QwenPaw.host.antd;
+function W(a) {
+  const d = Q(), g = Q(new Date(Date.now() - 864e5));
+  return a === d ? `${a} 今天` : a === g ? `${a} 昨天` : a;
 }
-function ue() {
-  const [r, d] = a.useState([]), [g, p] = a.useState(""), [c, v] = a.useState(""), [h, w] = a.useState(null), [f, S] = a.useState(!1), [i, y] = a.useState(null);
-  a.useEffect(() => {
+function pe() {
+  const [a, d] = n.useState([]), [g, p] = n.useState(""), [c, v] = n.useState(""), [h, w] = n.useState(null), [f, S] = n.useState(!1), [i, y] = n.useState(null);
+  n.useEffect(() => {
     k(`/trending/dates?language=${encodeURIComponent(c || "all")}`).then((e) => {
       const b = Array.isArray(e) ? e : [];
       d(b), b.length > 0 && !g && p(b[0]);
     }).catch(console.error);
-  }, [c]), a.useEffect(() => {
+  }, [c]), n.useEffect(() => {
     g && (S(!0), k(
       `/trending/daily?date=${encodeURIComponent(g)}&language=${encodeURIComponent(c || "all")}`
     ).then((e) => w(e ?? null)).catch(() => w(null)).finally(() => S(!1)));
@@ -79,14 +82,14 @@ function ue() {
   const $ = async (e) => {
     y(e);
     try {
-      await I(`/monitor/subscriptions?target=${encodeURIComponent(e)}`, {}), U.success(`已订阅 ${e}`);
+      await I(`/monitor/subscriptions?target=${encodeURIComponent(e)}`, {}), j.success(`已订阅 ${e}`);
     } catch {
-      U.error("订阅失败");
+      j.error("订阅失败");
     } finally {
       y(null);
     }
   };
-  return /* @__PURE__ */ a.createElement("div", { style: { padding: 16, display: "grid", gridTemplateColumns: "180px 1fr", gap: 16, minHeight: 500 } }, /* @__PURE__ */ a.createElement("div", { className: "gh-card", style: { padding: 0, overflow: "hidden", maxHeight: 600, overflowY: "auto" } }, /* @__PURE__ */ a.createElement("div", { style: { padding: "10px 12px", borderBottom: "1px solid var(--gh-border)", fontSize: "0.75rem", color: "var(--gh-text-tertiary)" } }, "📅 日期(", r.length, ")"), r.length === 0 ? /* @__PURE__ */ a.createElement("div", { style: { padding: 16, color: "var(--gh-text-tertiary)", fontSize: "0.8rem", textAlign: "center" } }, "暂无数据") : r.map((e) => /* @__PURE__ */ a.createElement(
+  return /* @__PURE__ */ n.createElement("div", { style: { padding: 16, display: "grid", gridTemplateColumns: "180px 1fr", gap: 16, minHeight: 500 } }, /* @__PURE__ */ n.createElement("div", { className: "gh-card", style: { padding: 0, overflow: "hidden", maxHeight: 600, overflowY: "auto" } }, /* @__PURE__ */ n.createElement("div", { style: { padding: "10px 12px", borderBottom: "1px solid var(--gh-border)", fontSize: "0.75rem", color: "var(--gh-text-tertiary)" } }, "📅 日期(", a.length, ")"), a.length === 0 ? /* @__PURE__ */ n.createElement("div", { style: { padding: 16, color: "var(--gh-text-tertiary)", fontSize: "0.8rem", textAlign: "center" } }, "暂无数据") : a.map((e) => /* @__PURE__ */ n.createElement(
     "button",
     {
       key: e,
@@ -103,17 +106,17 @@ function ue() {
         cursor: "pointer"
       }
     },
-    j(e)
-  ))), /* @__PURE__ */ a.createElement("div", { className: "gh-card", style: { padding: 0, overflow: "hidden" } }, /* @__PURE__ */ a.createElement("div", { style: { padding: "12px 16px", borderBottom: "1px solid var(--gh-border)", display: "flex", alignItems: "center", gap: 12 } }, /* @__PURE__ */ a.createElement("h4", { style: { margin: 0 } }, g ? j(g) : "选择日期"), /* @__PURE__ */ a.createElement(
+    W(e)
+  ))), /* @__PURE__ */ n.createElement("div", { className: "gh-card", style: { padding: 0, overflow: "hidden" } }, /* @__PURE__ */ n.createElement("div", { style: { padding: "12px 16px", borderBottom: "1px solid var(--gh-border)", display: "flex", alignItems: "center", gap: 12 } }, /* @__PURE__ */ n.createElement("h4", { style: { margin: 0 } }, g ? W(g) : "选择日期"), /* @__PURE__ */ n.createElement(
     "select",
     {
       value: c,
       onChange: (e) => v(e.target.value),
       style: { background: "var(--gh-elevated)", color: "var(--gh-text)", border: "1px solid var(--gh-border)", borderRadius: 6, padding: "4px 8px", fontSize: "0.8rem" }
     },
-    ge.map((e) => /* @__PURE__ */ a.createElement("option", { key: e.value, value: e.value }, e.label))
-  ), /* @__PURE__ */ a.createElement("span", { style: { marginLeft: "auto", color: "var(--gh-text-tertiary)", fontSize: "0.75rem" } }, (h == null ? void 0 : h.items.length) ?? 0, " 个仓库")), f ? /* @__PURE__ */ a.createElement("div", { style: { padding: 32, textAlign: "center" } }, /* @__PURE__ */ a.createElement(me, null)) : !h || h.items.length === 0 ? /* @__PURE__ */ a.createElement(de, { description: "暂无数据", style: { padding: 32 } }) : /* @__PURE__ */ a.createElement("table", { className: "gh-table" }, /* @__PURE__ */ a.createElement("thead", null, /* @__PURE__ */ a.createElement("tr", null, /* @__PURE__ */ a.createElement("th", { style: { width: 40 } }, "#"), /* @__PURE__ */ a.createElement("th", null, "仓库"), /* @__PURE__ */ a.createElement("th", null, "语言"), /* @__PURE__ */ a.createElement("th", { style: { textAlign: "right" } }, "Stars"), /* @__PURE__ */ a.createElement("th", { style: { textAlign: "right" } }, "今日涨"), /* @__PURE__ */ a.createElement("th", { style: { textAlign: "center", width: 100 } }, "操作"))), /* @__PURE__ */ a.createElement("tbody", null, h.items.map((e) => /* @__PURE__ */ a.createElement("tr", { key: e.full_name }, /* @__PURE__ */ a.createElement("td", { style: { color: "var(--gh-text-tertiary)" } }, e.rank), /* @__PURE__ */ a.createElement("td", null, /* @__PURE__ */ a.createElement("a", { href: e.url, target: "_blank", rel: "noreferrer", style: { fontWeight: 500 } }, e.full_name), e.description && /* @__PURE__ */ a.createElement("div", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)", marginTop: 2 } }, e.description.slice(0, 80))), /* @__PURE__ */ a.createElement("td", null, e.language ? /* @__PURE__ */ a.createElement("span", { className: "gh-tag gh-tag-blue" }, e.language) : /* @__PURE__ */ a.createElement("span", { className: "gh-text-tertiary" }, "—")), /* @__PURE__ */ a.createElement("td", { style: { textAlign: "right" } }, "⭐ ", A(e.stars)), /* @__PURE__ */ a.createElement("td", { style: { textAlign: "right" } }, e.stars_delta > 0 ? /* @__PURE__ */ a.createElement("span", { className: "gh-tag gh-tag-accent" }, "+", A(e.stars_delta)) : /* @__PURE__ */ a.createElement("span", { className: "gh-text-tertiary" }, "—")), /* @__PURE__ */ a.createElement("td", { style: { textAlign: "center" } }, /* @__PURE__ */ a.createElement(
-    he,
+    me.map((e) => /* @__PURE__ */ n.createElement("option", { key: e.value, value: e.value }, e.label))
+  ), /* @__PURE__ */ n.createElement("span", { style: { marginLeft: "auto", color: "var(--gh-text-tertiary)", fontSize: "0.75rem" } }, (h == null ? void 0 : h.items.length) ?? 0, " 个仓库")), f ? /* @__PURE__ */ n.createElement("div", { style: { padding: 32, textAlign: "center" } }, /* @__PURE__ */ n.createElement(de, null)) : !h || h.items.length === 0 ? /* @__PURE__ */ n.createElement(he, { description: "暂无数据", style: { padding: 32 } }) : /* @__PURE__ */ n.createElement("table", { className: "gh-table" }, /* @__PURE__ */ n.createElement("thead", null, /* @__PURE__ */ n.createElement("tr", null, /* @__PURE__ */ n.createElement("th", { style: { width: 40 } }, "#"), /* @__PURE__ */ n.createElement("th", null, "仓库"), /* @__PURE__ */ n.createElement("th", null, "语言"), /* @__PURE__ */ n.createElement("th", { style: { textAlign: "right" } }, "Stars"), /* @__PURE__ */ n.createElement("th", { style: { textAlign: "right" } }, "今日涨"), /* @__PURE__ */ n.createElement("th", { style: { textAlign: "center", width: 100 } }, "操作"))), /* @__PURE__ */ n.createElement("tbody", null, h.items.map((e) => /* @__PURE__ */ n.createElement("tr", { key: e.full_name }, /* @__PURE__ */ n.createElement("td", { style: { color: "var(--gh-text-tertiary)" } }, e.rank), /* @__PURE__ */ n.createElement("td", null, /* @__PURE__ */ n.createElement("a", { href: e.url, target: "_blank", rel: "noreferrer", style: { fontWeight: 500 } }, e.full_name), e.description && /* @__PURE__ */ n.createElement("div", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)", marginTop: 2 } }, e.description.slice(0, 80))), /* @__PURE__ */ n.createElement("td", null, e.language ? /* @__PURE__ */ n.createElement("span", { className: "gh-tag gh-tag-blue" }, e.language) : /* @__PURE__ */ n.createElement("span", { className: "gh-text-tertiary" }, "—")), /* @__PURE__ */ n.createElement("td", { style: { textAlign: "right" } }, "⭐ ", A(e.stars)), /* @__PURE__ */ n.createElement("td", { style: { textAlign: "right" } }, e.stars_delta > 0 ? /* @__PURE__ */ n.createElement("span", { className: "gh-tag gh-tag-accent" }, "+", A(e.stars_delta)) : /* @__PURE__ */ n.createElement("span", { className: "gh-text-tertiary" }, "—")), /* @__PURE__ */ n.createElement("td", { style: { textAlign: "center" } }, /* @__PURE__ */ n.createElement(
+    ue,
     {
       size: "small",
       loading: i === e.full_name,
@@ -122,9 +125,9 @@ function ue() {
     "订阅"
   ))))))));
 }
-const l = window.QwenPaw.host.React, { Input: pe, Spin: ye, Empty: Ee, Drawer: ve, Button: fe, message: W } = window.QwenPaw.host.antd;
-function be() {
-  const [r, d] = l.useState(""), [g, p] = l.useState([]), [c, v] = l.useState(!1), [h, w] = l.useState(null), [f, S] = l.useState([]), [i, y] = l.useState(!1), $ = async (m) => {
+const l = window.QwenPaw.host.React, { Input: ye, Spin: Ee, Empty: ve, Drawer: fe, Button: be, message: G } = window.QwenPaw.host.antd;
+function we() {
+  const [a, d] = l.useState(""), [g, p] = l.useState([]), [c, v] = l.useState(!1), [h, w] = l.useState(null), [f, S] = l.useState([]), [i, y] = l.useState(!1), $ = async (m) => {
     if (m.trim()) {
       v(!0);
       try {
@@ -147,23 +150,23 @@ function be() {
   }, b = async () => {
     if (h)
       try {
-        await I(`/monitor/subscriptions?target=${encodeURIComponent(h.full_name)}`, {}), W.success("已订阅");
+        await I(`/monitor/subscriptions?target=${encodeURIComponent(h.full_name)}`, {}), G.success("已订阅");
       } catch {
-        W.error("订阅失败");
+        G.error("订阅失败");
       }
   };
   return /* @__PURE__ */ l.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ l.createElement(
-    pe.Search,
+    ye.Search,
     {
       placeholder: "搜索项目名 / 描述...",
       enterButton: "搜索",
-      value: r,
+      value: a,
       onChange: (m) => d(m.target.value),
       onSearch: $,
       style: { maxWidth: 480, marginBottom: 16 }
     }
-  ), c ? /* @__PURE__ */ l.createElement("div", { style: { padding: 32, textAlign: "center" } }, /* @__PURE__ */ l.createElement(ye, null)) : g.length === 0 ? /* @__PURE__ */ l.createElement(Ee, { description: "输入关键词搜索" }) : /* @__PURE__ */ l.createElement("table", { className: "gh-table" }, /* @__PURE__ */ l.createElement("thead", null, /* @__PURE__ */ l.createElement("tr", null, /* @__PURE__ */ l.createElement("th", null, "仓库"), /* @__PURE__ */ l.createElement("th", null, "语言"), /* @__PURE__ */ l.createElement("th", { style: { textAlign: "right" } }, "Stars"), /* @__PURE__ */ l.createElement("th", { style: { textAlign: "right" } }, "Forks"), /* @__PURE__ */ l.createElement("th", { style: { textAlign: "right" } }, "上榜次数"))), /* @__PURE__ */ l.createElement("tbody", null, g.map((m) => /* @__PURE__ */ l.createElement("tr", { key: m.full_name, onClick: () => e(m) }, /* @__PURE__ */ l.createElement("td", null, /* @__PURE__ */ l.createElement("div", { style: { fontWeight: 500 } }, m.full_name), m.description && /* @__PURE__ */ l.createElement("div", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)" } }, m.description.slice(0, 80))), /* @__PURE__ */ l.createElement("td", null, m.language ? /* @__PURE__ */ l.createElement("span", { className: "gh-tag gh-tag-blue" }, m.language) : "—"), /* @__PURE__ */ l.createElement("td", { style: { textAlign: "right" } }, "⭐ ", A(m.stars)), /* @__PURE__ */ l.createElement("td", { style: { textAlign: "right" } }, "🍴 ", A(m.forks)), /* @__PURE__ */ l.createElement("td", { style: { textAlign: "right" } }, m.appearances ?? 0))))), /* @__PURE__ */ l.createElement(
-    ve,
+  ), c ? /* @__PURE__ */ l.createElement("div", { style: { padding: 32, textAlign: "center" } }, /* @__PURE__ */ l.createElement(Ee, null)) : g.length === 0 ? /* @__PURE__ */ l.createElement(ve, { description: "输入关键词搜索" }) : /* @__PURE__ */ l.createElement("table", { className: "gh-table" }, /* @__PURE__ */ l.createElement("thead", null, /* @__PURE__ */ l.createElement("tr", null, /* @__PURE__ */ l.createElement("th", null, "仓库"), /* @__PURE__ */ l.createElement("th", null, "语言"), /* @__PURE__ */ l.createElement("th", { style: { textAlign: "right" } }, "Stars"), /* @__PURE__ */ l.createElement("th", { style: { textAlign: "right" } }, "Forks"), /* @__PURE__ */ l.createElement("th", { style: { textAlign: "right" } }, "上榜次数"))), /* @__PURE__ */ l.createElement("tbody", null, g.map((m) => /* @__PURE__ */ l.createElement("tr", { key: m.full_name, onClick: () => e(m) }, /* @__PURE__ */ l.createElement("td", null, /* @__PURE__ */ l.createElement("div", { style: { fontWeight: 500 } }, m.full_name), m.description && /* @__PURE__ */ l.createElement("div", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)" } }, m.description.slice(0, 80))), /* @__PURE__ */ l.createElement("td", null, m.language ? /* @__PURE__ */ l.createElement("span", { className: "gh-tag gh-tag-blue" }, m.language) : "—"), /* @__PURE__ */ l.createElement("td", { style: { textAlign: "right" } }, "⭐ ", A(m.stars)), /* @__PURE__ */ l.createElement("td", { style: { textAlign: "right" } }, "🍴 ", A(m.forks)), /* @__PURE__ */ l.createElement("td", { style: { textAlign: "right" } }, m.appearances ?? 0))))), /* @__PURE__ */ l.createElement(
+    fe,
     {
       title: h == null ? void 0 : h.full_name,
       placement: "right",
@@ -171,10 +174,10 @@ function be() {
       open: i,
       onClose: () => y(!1)
     },
-    h && /* @__PURE__ */ l.createElement("div", null, /* @__PURE__ */ l.createElement(fe, { type: "primary", onClick: b, style: { marginBottom: 16 } }, "+ 订阅"), /* @__PURE__ */ l.createElement("p", { style: { color: "var(--gh-text-secondary)" } }, h.description ?? "—"), /* @__PURE__ */ l.createElement("div", { className: "gh-card", style: { marginBottom: 16 } }, /* @__PURE__ */ l.createElement("div", null, "⭐ ", A(h.stars), " stars · 🍴 ", A(h.forks), " forks"), /* @__PURE__ */ l.createElement("div", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)", marginTop: 8 } }, "首次上榜: ", h.first_seen ?? "—", " · 最近上榜: ", h.last_seen ?? "—")), /* @__PURE__ */ l.createElement("h4", { style: { marginBottom: 8 } }, "趋势 (近 10 天)"), f.length === 0 ? /* @__PURE__ */ l.createElement("div", { style: { color: "var(--gh-text-tertiary)" } }, "暂无趋势") : /* @__PURE__ */ l.createElement("ul", { style: { listStyle: "none", padding: 0 } }, f.slice(0, 10).map((m) => /* @__PURE__ */ l.createElement("li", { key: m.date, style: { padding: "6px 0", borderBottom: "1px solid var(--gh-border)" } }, /* @__PURE__ */ l.createElement("span", { className: "gh-tag" }, m.date), /* @__PURE__ */ l.createElement("span", { style: { marginLeft: 12 } }, "排名 #", m.rank, " · ⭐ ", A(m.stars))))))
+    h && /* @__PURE__ */ l.createElement("div", null, /* @__PURE__ */ l.createElement(be, { type: "primary", onClick: b, style: { marginBottom: 16 } }, "+ 订阅"), /* @__PURE__ */ l.createElement("p", { style: { color: "var(--gh-text-secondary)" } }, h.description ?? "—"), /* @__PURE__ */ l.createElement("div", { className: "gh-card", style: { marginBottom: 16 } }, /* @__PURE__ */ l.createElement("div", null, "⭐ ", A(h.stars), " stars · 🍴 ", A(h.forks), " forks"), /* @__PURE__ */ l.createElement("div", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)", marginTop: 8 } }, "首次上榜: ", h.first_seen ?? "—", " · 最近上榜: ", h.last_seen ?? "—")), /* @__PURE__ */ l.createElement("h4", { style: { marginBottom: 8 } }, "趋势 (近 10 天)"), f.length === 0 ? /* @__PURE__ */ l.createElement("div", { style: { color: "var(--gh-text-tertiary)" } }, "暂无趋势") : /* @__PURE__ */ l.createElement("ul", { style: { listStyle: "none", padding: 0 } }, f.slice(0, 10).map((m) => /* @__PURE__ */ l.createElement("li", { key: m.date, style: { padding: "6px 0", borderBottom: "1px solid var(--gh-border)" } }, /* @__PURE__ */ l.createElement("span", { className: "gh-tag" }, m.date), /* @__PURE__ */ l.createElement("span", { style: { marginLeft: 12 } }, "排名 #", m.rank, " · ⭐ ", A(m.stars))))))
   ));
 }
-const n = window.QwenPaw.host.React, { Button: G, Spin: we, Empty: J, Modal: xe, Input: Se, Popconfirm: $e, message: P } = window.QwenPaw.host.antd, ke = {
+const r = window.QwenPaw.host.React, { Button: J, Spin: xe, Empty: H, Modal: Se, Input: $e, Popconfirm: ke, message: P } = window.QwenPaw.host.antd, _e = {
   release: { icon: "📦", cls: "gh-tag-purple" },
   commit: { icon: "📝", cls: "gh-tag-blue" },
   star_update: { icon: "⭐", cls: "gh-tag-warning" },
@@ -183,8 +186,8 @@ const n = window.QwenPaw.host.React, { Button: G, Spin: we, Empty: J, Modal: xe,
   refresh_error: { icon: "⚠️", cls: "gh-tag-warning" },
   collector_error: { icon: "❌", cls: "gh-tag-warning" }
 };
-function _e() {
-  const [r, d] = n.useState([]), [g, p] = n.useState([]), [c, v] = n.useState(!1), [h, w] = n.useState(!1), [f, S] = n.useState(""), i = n.useCallback(async () => {
+function Ae() {
+  const [a, d] = r.useState([]), [g, p] = r.useState([]), [c, v] = r.useState(!1), [h, w] = r.useState(!1), [f, S] = r.useState(""), i = r.useCallback(async () => {
     v(!0);
     try {
       const [e, b] = await Promise.all([
@@ -198,7 +201,7 @@ function _e() {
       v(!1);
     }
   }, []);
-  n.useEffect(() => {
+  r.useEffect(() => {
     i();
   }, [i]);
   const y = async () => {
@@ -210,16 +213,16 @@ function _e() {
       }
   }, $ = async (e) => {
     try {
-      await ce(`/monitor/subscriptions/${e}`), P.success("已取消"), i();
+      await ie(`/monitor/subscriptions/${e}`), P.success("已取消"), i();
     } catch {
       P.error("取消失败");
     }
   };
-  return /* @__PURE__ */ n.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ n.createElement("div", { className: "gh-row", style: { justifyContent: "space-between", marginBottom: 16 } }, /* @__PURE__ */ n.createElement("h3", null, "📡 我的订阅 (", r.length, ")"), /* @__PURE__ */ n.createElement(G, { type: "primary", onClick: () => w(!0) }, "+ 添加订阅")), c ? /* @__PURE__ */ n.createElement(we, null) : r.length === 0 ? /* @__PURE__ */ n.createElement(J, { description: "暂无订阅" }) : /* @__PURE__ */ n.createElement("table", { className: "gh-table", style: { marginBottom: 24 } }, /* @__PURE__ */ n.createElement("thead", null, /* @__PURE__ */ n.createElement("tr", null, /* @__PURE__ */ n.createElement("th", null, "仓库"), /* @__PURE__ */ n.createElement("th", null, "状态"), /* @__PURE__ */ n.createElement("th", null, "当前 Stars"), /* @__PURE__ */ n.createElement("th", null, "上次检查"), /* @__PURE__ */ n.createElement("th", { style: { width: 100 } }, "操作"))), /* @__PURE__ */ n.createElement("tbody", null, r.map((e) => /* @__PURE__ */ n.createElement("tr", { key: e.id }, /* @__PURE__ */ n.createElement("td", { style: { fontWeight: 500 } }, e.target), /* @__PURE__ */ n.createElement("td", null, e.enabled ? /* @__PURE__ */ n.createElement("span", { className: "gh-tag gh-tag-accent" }, "监控中") : /* @__PURE__ */ n.createElement("span", { className: "gh-tag" }, "已暂停")), /* @__PURE__ */ n.createElement("td", null, e.current_stars != null ? `⭐ ${A(e.current_stars)}` : "—"), /* @__PURE__ */ n.createElement("td", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)" } }, e.last_checked_at ? Q(e.last_checked_at) : "未拉取"), /* @__PURE__ */ n.createElement("td", null, /* @__PURE__ */ n.createElement($e, { title: "确认取消?", onConfirm: () => $(e.id) }, /* @__PURE__ */ n.createElement(G, { size: "small", danger: !0 }, "删除"))))))), /* @__PURE__ */ n.createElement("h3", { style: { marginBottom: 12 } }, "📊 监控动态 (", g.length, ")"), g.length === 0 ? /* @__PURE__ */ n.createElement(J, { description: "暂无动态" }) : /* @__PURE__ */ n.createElement("div", null, g.map((e, b) => {
-    const m = ke[e.event_type] ?? { icon: "📌", cls: "" };
-    return /* @__PURE__ */ n.createElement("div", { key: b, className: "gh-card", style: { marginBottom: 8 } }, /* @__PURE__ */ n.createElement("div", { className: "gh-row", style: { justifyContent: "space-between" } }, /* @__PURE__ */ n.createElement("div", { className: "gh-row" }, /* @__PURE__ */ n.createElement("span", { style: { fontWeight: 500 } }, e.repo_name), /* @__PURE__ */ n.createElement("span", { className: `gh-tag ${m.cls}` }, m.icon, " ", e.event_type)), /* @__PURE__ */ n.createElement("span", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)" } }, Q(e.event_time))), /* @__PURE__ */ n.createElement("div", { style: { marginTop: 6 } }, e.title), e.body && /* @__PURE__ */ n.createElement("div", { style: { fontSize: "0.8rem", color: "var(--gh-text-tertiary)", marginTop: 4 } }, e.body));
-  })), /* @__PURE__ */ n.createElement(xe, { title: "添加订阅", open: h, onOk: y, onCancel: () => w(!1) }, /* @__PURE__ */ n.createElement(
-    Se,
+  return /* @__PURE__ */ r.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ r.createElement("div", { className: "gh-row", style: { justifyContent: "space-between", marginBottom: 16 } }, /* @__PURE__ */ r.createElement("h3", null, "📡 我的订阅 (", a.length, ")"), /* @__PURE__ */ r.createElement(J, { type: "primary", onClick: () => w(!0) }, "+ 添加订阅")), c ? /* @__PURE__ */ r.createElement(xe, null) : a.length === 0 ? /* @__PURE__ */ r.createElement(H, { description: "暂无订阅" }) : /* @__PURE__ */ r.createElement("table", { className: "gh-table", style: { marginBottom: 24 } }, /* @__PURE__ */ r.createElement("thead", null, /* @__PURE__ */ r.createElement("tr", null, /* @__PURE__ */ r.createElement("th", null, "仓库"), /* @__PURE__ */ r.createElement("th", null, "状态"), /* @__PURE__ */ r.createElement("th", null, "当前 Stars"), /* @__PURE__ */ r.createElement("th", null, "上次检查"), /* @__PURE__ */ r.createElement("th", { style: { width: 100 } }, "操作"))), /* @__PURE__ */ r.createElement("tbody", null, a.map((e) => /* @__PURE__ */ r.createElement("tr", { key: e.id }, /* @__PURE__ */ r.createElement("td", { style: { fontWeight: 500 } }, e.target), /* @__PURE__ */ r.createElement("td", null, e.enabled ? /* @__PURE__ */ r.createElement("span", { className: "gh-tag gh-tag-accent" }, "监控中") : /* @__PURE__ */ r.createElement("span", { className: "gh-tag" }, "已暂停")), /* @__PURE__ */ r.createElement("td", null, e.current_stars != null ? `⭐ ${A(e.current_stars)}` : "—"), /* @__PURE__ */ r.createElement("td", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)" } }, e.last_checked_at ? U(e.last_checked_at) : "未拉取"), /* @__PURE__ */ r.createElement("td", null, /* @__PURE__ */ r.createElement(ke, { title: "确认取消?", onConfirm: () => $(e.id) }, /* @__PURE__ */ r.createElement(J, { size: "small", danger: !0 }, "删除"))))))), /* @__PURE__ */ r.createElement("h3", { style: { marginBottom: 12 } }, "📊 监控动态 (", g.length, ")"), g.length === 0 ? /* @__PURE__ */ r.createElement(H, { description: "暂无动态" }) : /* @__PURE__ */ r.createElement("div", null, g.map((e, b) => {
+    const m = _e[e.event_type] ?? { icon: "📌", cls: "" };
+    return /* @__PURE__ */ r.createElement("div", { key: b, className: "gh-card", style: { marginBottom: 8 } }, /* @__PURE__ */ r.createElement("div", { className: "gh-row", style: { justifyContent: "space-between" } }, /* @__PURE__ */ r.createElement("div", { className: "gh-row" }, /* @__PURE__ */ r.createElement("span", { style: { fontWeight: 500 } }, e.repo_name), /* @__PURE__ */ r.createElement("span", { className: `gh-tag ${m.cls}` }, m.icon, " ", e.event_type)), /* @__PURE__ */ r.createElement("span", { style: { fontSize: "0.75rem", color: "var(--gh-text-tertiary)" } }, U(e.event_time))), /* @__PURE__ */ r.createElement("div", { style: { marginTop: 6 } }, e.title), e.body && /* @__PURE__ */ r.createElement("div", { style: { fontSize: "0.8rem", color: "var(--gh-text-tertiary)", marginTop: 4 } }, e.body));
+  })), /* @__PURE__ */ r.createElement(Se, { title: "添加订阅", open: h, onOk: y, onCancel: () => w(!1) }, /* @__PURE__ */ r.createElement(
+    $e,
     {
       placeholder: "owner/repo (例: facebook/react)",
       value: f,
@@ -228,9 +231,9 @@ function _e() {
     }
   )));
 }
-const t = window.QwenPaw.host.React, { Spin: Ae, Empty: Ce, Drawer: Ne, Button: H } = window.QwenPaw.host.antd;
-function Te() {
-  const [r, d] = t.useState([]), [g, p] = t.useState(!1), [c, v] = t.useState(null), [h, w] = t.useState(!1), f = t.useCallback(async () => {
+const t = window.QwenPaw.host.React, { Spin: Ce, Empty: Ne, Drawer: Te, Button: q } = window.QwenPaw.host.antd;
+function Be() {
+  const [a, d] = t.useState([]), [g, p] = t.useState(!1), [c, v] = t.useState(null), [h, w] = t.useState(!1), f = t.useCallback(async () => {
     p(!0);
     try {
       const i = await k("/reports?limit=50");
@@ -247,12 +250,12 @@ function Te() {
   const S = (i) => {
     v(i), w(!0);
   };
-  return /* @__PURE__ */ t.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ t.createElement("div", { className: "gh-row", style: { justifyContent: "space-between", marginBottom: 16 } }, /* @__PURE__ */ t.createElement("h3", null, "📊 分析报告 (", r.length, ")"), /* @__PURE__ */ t.createElement(H, { onClick: f }, "🔄 刷新")), g ? /* @__PURE__ */ t.createElement(Ae, null) : r.length === 0 ? /* @__PURE__ */ t.createElement(Ce, { description: "暂无报告" }) : /* @__PURE__ */ t.createElement("table", { className: "gh-table" }, /* @__PURE__ */ t.createElement("thead", null, /* @__PURE__ */ t.createElement("tr", null, /* @__PURE__ */ t.createElement("th", null, "日期"), /* @__PURE__ */ t.createElement("th", null, "类型"), /* @__PURE__ */ t.createElement("th", null, "来源"), /* @__PURE__ */ t.createElement("th", null, "概览"), /* @__PURE__ */ t.createElement("th", { style: { width: 80 } }, "操作"))), /* @__PURE__ */ t.createElement("tbody", null, r.map((i) => {
+  return /* @__PURE__ */ t.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ t.createElement("div", { className: "gh-row", style: { justifyContent: "space-between", marginBottom: 16 } }, /* @__PURE__ */ t.createElement("h3", null, "📊 分析报告 (", a.length, ")"), /* @__PURE__ */ t.createElement(q, { onClick: f }, "🔄 刷新")), g ? /* @__PURE__ */ t.createElement(Ce, null) : a.length === 0 ? /* @__PURE__ */ t.createElement(Ne, { description: "暂无报告" }) : /* @__PURE__ */ t.createElement("table", { className: "gh-table" }, /* @__PURE__ */ t.createElement("thead", null, /* @__PURE__ */ t.createElement("tr", null, /* @__PURE__ */ t.createElement("th", null, "日期"), /* @__PURE__ */ t.createElement("th", null, "类型"), /* @__PURE__ */ t.createElement("th", null, "来源"), /* @__PURE__ */ t.createElement("th", null, "概览"), /* @__PURE__ */ t.createElement("th", { style: { width: 80 } }, "操作"))), /* @__PURE__ */ t.createElement("tbody", null, a.map((i) => {
     var y, $;
-    return /* @__PURE__ */ t.createElement("tr", { key: i.id }, /* @__PURE__ */ t.createElement("td", null, i.date), /* @__PURE__ */ t.createElement("td", null, /* @__PURE__ */ t.createElement("span", { className: "gh-tag gh-tag-blue" }, i.type)), /* @__PURE__ */ t.createElement("td", null, i.source === "llm" ? /* @__PURE__ */ t.createElement("span", { className: "gh-tag gh-tag-purple" }, "🤖 AI") : /* @__PURE__ */ t.createElement("span", { className: "gh-tag gh-tag-accent" }, "📝 手动")), /* @__PURE__ */ t.createElement("td", { style: { color: "var(--gh-text-secondary)", fontSize: "0.8rem" } }, (($ = (y = i.content) == null ? void 0 : y.overview) == null ? void 0 : $.slice(0, 80)) ?? "—"), /* @__PURE__ */ t.createElement("td", null, /* @__PURE__ */ t.createElement(H, { size: "small", onClick: () => S(i) }, "查看")));
-  }))), /* @__PURE__ */ t.createElement(Ne, { title: c ? `报告 - ${c.date}` : "", placement: "right", width: 560, open: h, onClose: () => w(!1) }, (c == null ? void 0 : c.content) && /* @__PURE__ */ t.createElement("div", null, c.content.overview && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("h4", null, "📊 概览"), /* @__PURE__ */ t.createElement("p", { style: { color: "var(--gh-text-secondary)" } }, c.content.overview)), c.content.highlights && c.content.highlights.length > 0 && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("h4", { style: { marginTop: 16 } }, "🔥 亮点项目"), c.content.highlights.map((i, y) => /* @__PURE__ */ t.createElement("div", { key: y, className: "gh-card", style: { marginBottom: 8 } }, /* @__PURE__ */ t.createElement("div", { style: { fontWeight: 500 } }, i.project), /* @__PURE__ */ t.createElement("div", { style: { fontSize: "0.8rem", color: "var(--gh-text-tertiary)", marginTop: 4 } }, i.insight)))), c.content.trends && c.content.trends.length > 0 && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("h4", { style: { marginTop: 16 } }, "📈 趋势"), /* @__PURE__ */ t.createElement("ul", { style: { paddingLeft: 20 } }, c.content.trends.map((i, y) => /* @__PURE__ */ t.createElement("li", { key: y }, i)))), c.content.suggestions && c.content.suggestions.length > 0 && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("h4", { style: { marginTop: 16 } }, "💡 建议"), /* @__PURE__ */ t.createElement("ul", { style: { paddingLeft: 20 } }, c.content.suggestions.map((i, y) => /* @__PURE__ */ t.createElement("li", { key: y }, i)))))));
+    return /* @__PURE__ */ t.createElement("tr", { key: i.id }, /* @__PURE__ */ t.createElement("td", null, i.date), /* @__PURE__ */ t.createElement("td", null, /* @__PURE__ */ t.createElement("span", { className: "gh-tag gh-tag-blue" }, i.type)), /* @__PURE__ */ t.createElement("td", null, i.source === "llm" ? /* @__PURE__ */ t.createElement("span", { className: "gh-tag gh-tag-purple" }, "🤖 AI") : /* @__PURE__ */ t.createElement("span", { className: "gh-tag gh-tag-accent" }, "📝 手动")), /* @__PURE__ */ t.createElement("td", { style: { color: "var(--gh-text-secondary)", fontSize: "0.8rem" } }, (($ = (y = i.content) == null ? void 0 : y.overview) == null ? void 0 : $.slice(0, 80)) ?? "—"), /* @__PURE__ */ t.createElement("td", null, /* @__PURE__ */ t.createElement(q, { size: "small", onClick: () => S(i) }, "查看")));
+  }))), /* @__PURE__ */ t.createElement(Te, { title: c ? `报告 - ${c.date}` : "", placement: "right", width: 560, open: h, onClose: () => w(!1) }, (c == null ? void 0 : c.content) && /* @__PURE__ */ t.createElement("div", null, c.content.overview && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("h4", null, "📊 概览"), /* @__PURE__ */ t.createElement("p", { style: { color: "var(--gh-text-secondary)" } }, c.content.overview)), c.content.highlights && c.content.highlights.length > 0 && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("h4", { style: { marginTop: 16 } }, "🔥 亮点项目"), c.content.highlights.map((i, y) => /* @__PURE__ */ t.createElement("div", { key: y, className: "gh-card", style: { marginBottom: 8 } }, /* @__PURE__ */ t.createElement("div", { style: { fontWeight: 500 } }, i.project), /* @__PURE__ */ t.createElement("div", { style: { fontSize: "0.8rem", color: "var(--gh-text-tertiary)", marginTop: 4 } }, i.insight)))), c.content.trends && c.content.trends.length > 0 && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("h4", { style: { marginTop: 16 } }, "📈 趋势"), /* @__PURE__ */ t.createElement("ul", { style: { paddingLeft: 20 } }, c.content.trends.map((i, y) => /* @__PURE__ */ t.createElement("li", { key: y }, i)))), c.content.suggestions && c.content.suggestions.length > 0 && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("h4", { style: { marginTop: 16 } }, "💡 建议"), /* @__PURE__ */ t.createElement("ul", { style: { paddingLeft: 20 } }, c.content.suggestions.map((i, y) => /* @__PURE__ */ t.createElement("li", { key: y }, i)))))));
 }
-const o = window.QwenPaw.host.React, { Switch: Be, InputNumber: Re, Radio: D, Select: Pe, Button: q, message: _, Spin: De } = window.QwenPaw.host.antd, ze = [30, 60, 180, 360, 720, 1440], Ie = [
+const o = window.QwenPaw.host.React, { Switch: Re, InputNumber: Pe, Radio: D, Select: De, Button: K, message: _, Spin: ze } = window.QwenPaw.host.antd, Ie = [30, 60, 180, 360, 720, 1440], Le = [
   { value: "", label: "全部" },
   { value: "python", label: "Python" },
   { value: "go", label: "Go" },
@@ -262,8 +265,8 @@ const o = window.QwenPaw.host.React, { Switch: Be, InputNumber: Re, Radio: D, Se
   { value: "java", label: "Java" },
   { value: "html", label: "HTML" }
 ];
-function Le() {
-  const [r, d] = o.useState(!0), [g, p] = o.useState(null), [c, v] = o.useState(60), [h, w] = o.useState(!0), [f, S] = o.useState("daily"), [i, y] = o.useState([""]), [$, e] = o.useState(!1), [b, m] = o.useState(null), [E, ee] = o.useState(
+function Fe() {
+  const [a, d] = o.useState(!0), [g, p] = o.useState(null), [c, v] = o.useState(60), [h, w] = o.useState(!0), [f, S] = o.useState("daily"), [i, y] = o.useState([""]), [$, e] = o.useState(!1), [b, m] = o.useState(null), [E, te] = o.useState(
     null
   ), B = o.useCallback(async () => {
     d(!0);
@@ -287,35 +290,35 @@ function Le() {
       collect_languages: s.collect_languages ?? i
     };
     try {
-      await ie("/settings", N), _.success("已保存"), await B();
+      await ge("/settings", N), _.success("已保存"), await B();
     } catch {
       _.error("保存失败");
     }
-  }, te = async (s) => {
+  }, ae = async (s) => {
     w(s), await R({ collect_enabled: s });
   }, M = async (s) => {
     s != null && (v(s), await R({ collect_interval_min: s }));
-  }, ae = async (s) => {
+  }, ne = async (s) => {
     const N = s.target.value;
     S(N), await R({ collect_period: N });
-  }, ne = async (s) => {
+  }, re = async (s) => {
     y(s), await R({ collect_languages: s });
-  }, re = async () => {
+  }, le = async () => {
     e(!0), m(null);
     try {
       const s = await I("/settings/trigger-collect", {});
-      m(s.task_id), le(s.task_id);
+      m(s.task_id), oe(s.task_id);
     } catch {
       _.error("触发失败"), e(!1);
     }
-  }, le = async (s) => {
+  }, oe = async (s) => {
     const N = Date.now(), L = async () => {
       var O;
       try {
         const C = await k(
           `/settings/trigger-collect/${s}`
         );
-        C.status === "done" ? (ee(C.result ?? null), e(!1), _.success(
+        C.status === "done" ? (te(C.result ?? null), e(!1), _.success(
           `采集完成: ${((O = C.result) == null ? void 0 : O.ok.length) ?? 0} 个语言成功`
         )) : C.status === "error" || C.status === "timeout" ? (e(!1), _.error(`采集${C.status === "timeout" ? "超时" : "失败"}`)) : Date.now() - N > 6 * 60 * 1e3 ? (e(!1), _.error("轮询超时")) : setTimeout(L, 3e3);
       } catch {
@@ -324,8 +327,8 @@ function Le() {
     };
     L();
   };
-  return r || !g ? /* @__PURE__ */ o.createElement("div", { style: { padding: 32, textAlign: "center" } }, /* @__PURE__ */ o.createElement(De, null)) : /* @__PURE__ */ o.createElement("div", { style: { padding: 24, maxWidth: 720 } }, /* @__PURE__ */ o.createElement("h2", { style: { marginBottom: 24 } }, "⚙️ 采集设置"), /* @__PURE__ */ o.createElement("section", { className: "gh-card", style: { marginBottom: 16 } }, /* @__PURE__ */ o.createElement("h4", { style: { marginBottom: 12 } }, "启用采集"), /* @__PURE__ */ o.createElement(Be, { checked: h, onChange: te }), /* @__PURE__ */ o.createElement("span", { className: "gh-text-secondary", style: { marginLeft: 12 } }, h ? "✅ 运行中" : "⏸ 已暂停")), /* @__PURE__ */ o.createElement("section", { className: "gh-card", style: { marginBottom: 16 } }, /* @__PURE__ */ o.createElement("h4", { style: { marginBottom: 12 } }, "采集频率"), /* @__PURE__ */ o.createElement(
-    Re,
+  return a || !g ? /* @__PURE__ */ o.createElement("div", { style: { padding: 32, textAlign: "center" } }, /* @__PURE__ */ o.createElement(ze, null)) : /* @__PURE__ */ o.createElement("div", { style: { padding: 24, maxWidth: 720 } }, /* @__PURE__ */ o.createElement("h2", { style: { marginBottom: 24 } }, "⚙️ 采集设置"), /* @__PURE__ */ o.createElement("section", { className: "gh-card", style: { marginBottom: 16 } }, /* @__PURE__ */ o.createElement("h4", { style: { marginBottom: 12 } }, "启用采集"), /* @__PURE__ */ o.createElement(Re, { checked: h, onChange: ae }), /* @__PURE__ */ o.createElement("span", { className: "gh-text-secondary", style: { marginLeft: 12 } }, h ? "✅ 运行中" : "⏸ 已暂停")), /* @__PURE__ */ o.createElement("section", { className: "gh-card", style: { marginBottom: 16 } }, /* @__PURE__ */ o.createElement("h4", { style: { marginBottom: 12 } }, "采集频率"), /* @__PURE__ */ o.createElement(
+    Pe,
     {
       value: c,
       onChange: M,
@@ -338,7 +341,7 @@ function Le() {
     {
       style: { marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }
     },
-    ze.map((s) => /* @__PURE__ */ o.createElement(
+    Ie.map((s) => /* @__PURE__ */ o.createElement(
       "button",
       {
         key: s,
@@ -351,20 +354,20 @@ function Le() {
     D.Group,
     {
       value: f,
-      onChange: ae,
+      onChange: ne,
       style: { display: "flex", gap: 8 }
     },
     /* @__PURE__ */ o.createElement(D, { value: "daily" }, "Daily"),
     /* @__PURE__ */ o.createElement(D, { value: "weekly" }, "Weekly"),
     /* @__PURE__ */ o.createElement(D, { value: "monthly" }, "Monthly")
   )), /* @__PURE__ */ o.createElement("section", { className: "gh-card", style: { marginBottom: 16 } }, /* @__PURE__ */ o.createElement("h4", { style: { marginBottom: 12 } }, "抓取语言"), /* @__PURE__ */ o.createElement(
-    Pe,
+    De,
     {
       mode: "multiple",
       value: i,
-      onChange: ne,
+      onChange: re,
       style: { width: "100%" },
-      options: Ie
+      options: Le
     }
   ), /* @__PURE__ */ o.createElement(
     "p",
@@ -402,17 +405,17 @@ function Le() {
     },
     "还没手动触发过采集"
   )), /* @__PURE__ */ o.createElement("div", { style: { display: "flex", gap: 12 } }, /* @__PURE__ */ o.createElement(
-    q,
+    K,
     {
       type: "primary",
       loading: $,
-      onClick: re,
+      onClick: le,
       disabled: !h
     },
     "🚀 立即采集一次"
-  ), /* @__PURE__ */ o.createElement(q, { onClick: B }, "🔄 刷新状态")));
+  ), /* @__PURE__ */ o.createElement(K, { onClick: B }, "🔄 刷新状态")));
 }
-const u = "gh-trending-root", Fe = `
+const u = "gh-trending-root", Me = `
 .${u} {
   --gh-bg: #0A0D14;
   --gh-card: #171D2A;
@@ -500,28 +503,28 @@ const u = "gh-trending-root", Fe = `
 .${u} .gh-tag-blue { color: var(--gh-blue); border-color: var(--gh-blue); }
 .${u} h1, h2, h3, h4, h5 { color: var(--gh-text); margin: 0; }
 .${u} a { color: var(--gh-accent); }
-`, Y = window.QwenPaw.host, x = Y.React, { Tabs: Z } = Y.antd, { TabPane: T } = Z;
-function Me() {
-  const [r, d] = x.useState("trending");
-  return /* @__PURE__ */ x.createElement("div", { className: u, style: { height: "100%" } }, /* @__PURE__ */ x.createElement("style", { dangerouslySetInnerHTML: { __html: Fe } }), /* @__PURE__ */ x.createElement(
-    Z,
+`, Z = window.QwenPaw.host, x = Z.React, { Tabs: ee } = Z.antd, { TabPane: T } = ee;
+function Oe() {
+  const [a, d] = x.useState("trending");
+  return /* @__PURE__ */ x.createElement("div", { className: u, style: { height: "100%" } }, /* @__PURE__ */ x.createElement("style", { dangerouslySetInnerHTML: { __html: Me } }), /* @__PURE__ */ x.createElement(
+    ee,
     {
-      activeKey: r,
+      activeKey: a,
       onChange: d,
       style: { height: "100%", padding: "0 16px" }
     },
-    /* @__PURE__ */ x.createElement(T, { tab: "🔥 热榜", key: "trending" }, /* @__PURE__ */ x.createElement(ue, null)),
-    /* @__PURE__ */ x.createElement(T, { tab: "📦 仓库", key: "repos" }, /* @__PURE__ */ x.createElement(be, null)),
-    /* @__PURE__ */ x.createElement(T, { tab: "📡 订阅", key: "monitor" }, /* @__PURE__ */ x.createElement(_e, null)),
-    /* @__PURE__ */ x.createElement(T, { tab: "📊 报告", key: "reports" }, /* @__PURE__ */ x.createElement(Te, null)),
-    /* @__PURE__ */ x.createElement(T, { tab: "⚙️ 设置", key: "settings" }, /* @__PURE__ */ x.createElement(Le, null))
+    /* @__PURE__ */ x.createElement(T, { tab: "🔥 热榜", key: "trending" }, /* @__PURE__ */ x.createElement(pe, null)),
+    /* @__PURE__ */ x.createElement(T, { tab: "📦 仓库", key: "repos" }, /* @__PURE__ */ x.createElement(we, null)),
+    /* @__PURE__ */ x.createElement(T, { tab: "📡 订阅", key: "monitor" }, /* @__PURE__ */ x.createElement(Ae, null)),
+    /* @__PURE__ */ x.createElement(T, { tab: "📊 报告", key: "reports" }, /* @__PURE__ */ x.createElement(Be, null)),
+    /* @__PURE__ */ x.createElement(T, { tab: "⚙️ 设置", key: "settings" }, /* @__PURE__ */ x.createElement(Fe, null))
   ));
 }
-var K, V;
-(V = (K = window.QwenPaw).registerRoutes) == null || V.call(K, "github-trending", [
+var Y, V;
+(V = (Y = window.QwenPaw).registerRoutes) == null || V.call(Y, "github-trending", [
   {
     path: "/plugin/github-trending",
-    component: Me,
+    component: Oe,
     label: "热榜",
     icon: "📊",
     priority: 10

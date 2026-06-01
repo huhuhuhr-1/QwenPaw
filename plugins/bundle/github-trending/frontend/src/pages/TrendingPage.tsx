@@ -5,7 +5,7 @@ import type * as ReactNS from "react";
 const React: typeof ReactNS = window.QwenPaw.host.React;
 const { Spin, Empty, Button, message } = window.QwenPaw.host.antd;
 import { apiGet, apiPost } from "../api";
-import { formatNumber, LANGUAGES } from "../utils";
+import { formatNumber, LANGUAGES, localDateString } from "../utils";
 
 type TrendingItem = {
   rank: number;
@@ -26,8 +26,9 @@ type TrendingData = {
 };
 
 function formatDate(d: string): string {
-  const today = new Date().toISOString().split("T")[0];
-  const yest = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  // 用本地日期比较(避免 UTC 偏移 bug:UTC+8 早上 0-8 点时 toISOString 还在昨天)
+  const today = localDateString();
+  const yest = localDateString(new Date(Date.now() - 86400000));
   if (d === today) return `${d} 今天`;
   if (d === yest) return `${d} 昨天`;
   return d;
