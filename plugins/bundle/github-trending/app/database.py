@@ -26,17 +26,18 @@ async def init_db():
     """初始化数据库"""
     db = await get_db()
     try:
-        # 热榜数据（按天聚合）
+        # 热榜数据（按天+语言聚合）
         await db.execute("""
             CREATE TABLE IF NOT EXISTS daily_trending (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date DATE UNIQUE NOT NULL,
+                date DATE NOT NULL,
                 language VARCHAR(50) DEFAULT 'all',
                 total_count INTEGER DEFAULT 0,
                 updated_count INTEGER DEFAULT 0,
                 summary TEXT,
                 data TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(date, language)
             )
         """)
 
@@ -135,6 +136,30 @@ async def init_db():
             )
         """)
 
+        # 运行时设置
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 订阅 repo 详情快照
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS repo_watch_log (
+                subscription_id INTEGER NOT NULL,
+                full_name TEXT NOT NULL,
+                stars INTEGER DEFAULT 0,
+                forks INTEGER DEFAULT 0,
+                language TEXT,
+                description TEXT,
+                last_checked_at DATETIME,
+                PRIMARY KEY (subscription_id, full_name),
+                FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+            )
+        """)
+
         # 索引
         await db.execute("CREATE INDEX IF NOT EXISTS idx_trending_date ON daily_trending(date)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_repos_name ON repos(full_name)")
@@ -157,10 +182,11 @@ async def upload_trending(date_str: str, language: str, items: List[Dict], summa
     db = await get_db()
     try:
         # 获取现有数据
-        row = await db.execute(
+        cur = await db.execute(
             "SELECT data, updated_count FROM daily_trending WHERE date = ? AND language = ?",
             (date_str, language)
-        ).fetchone()
+        )
+        row = await cur.fetchone()
 
         existing_data = []
         updated_count = 0
@@ -204,10 +230,11 @@ async def get_daily_trending(date_str: str = None, language: str = "all") -> Opt
 
     db = await get_db()
     try:
-        row = await db.execute(
+        cur = await db.execute(
             "SELECT * FROM daily_trending WHERE date = ? AND language = ?",
             (date_str, language)
-        ).fetchone()
+        )
+        row = await cur.fetchone()
 
         if row:
             data = json.loads(row["data"]) if row["data"] else []
@@ -228,10 +255,11 @@ async def get_available_dates(language: str = "all") -> List[str]:
     """获取有数据的日期列表"""
     db = await get_db()
     try:
-        rows = await db.execute(
+        cur = await db.execute(
             "SELECT DISTINCT date FROM daily_trending WHERE language = ? ORDER BY date DESC",
             (language,)
-        ).fetchall()
+        )
+        rows = await cur.fetchall()
         return [row["date"] for row in rows]
     finally:
         await db.close()
@@ -244,11 +272,12 @@ async def search_repos(keyword: str, limit: int = 20) -> List[Dict]:
     """搜索项目"""
     db = await get_db()
     try:
-        rows = await db.execute("""
+        cur = await db.execute("""
             SELECT * FROM repos
             WHERE full_name LIKE ? OR name LIKE ? OR description LIKE ?
             ORDER BY stars DESC LIMIT ?
-        """, (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", limit)).fetchall()
+        """, (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", limit))
+        rows = await cur.fetchall()
         return [dict(row) for row in rows]
     finally:
         await db.close()
@@ -258,9 +287,10 @@ async def get_repo(full_name: str) -> Optional[Dict]:
     """获取项目详情"""
     db = await get_db()
     try:
-        row = await db.execute(
+        cur = await db.execute(
             "SELECT * FROM repos WHERE full_name = ?", (full_name,)
-        ).fetchone()
+        )
+        row = await cur.fetchone()
         return dict(row) if row else None
     finally:
         await db.close()
@@ -270,13 +300,14 @@ async def get_repo_trend(full_name: str) -> List[Dict]:
     """获取项目趋势"""
     db = await get_db()
     try:
-        rows = await db.execute("""
+        cur = await db.execute("""
             SELECT rh.* FROM repo_history rh
             JOIN repos r ON rh.repo_id = r.id
             WHERE r.full_name = ?
             ORDER BY rh.date DESC
             LIMIT 30
-        """, (full_name,)).fetchall()
+        """, (full_name,))
+        rows = await cur.fetchall()
         return [dict(row) for row in rows]
     finally:
         await db.close()
@@ -290,9 +321,10 @@ async def upsert_repo(item: Dict):
         now = datetime.now().strftime("%Y-%m-%d")
 
         # 检查是否存在
-        row = await db.execute(
+        cur = await db.execute(
             "SELECT id, first_seen, appearances FROM repos WHERE full_name = ?", (full_name,)
-        ).fetchone()
+        )
+        row = await cur.fetchone()
 
         if row:
             # 更新
@@ -330,7 +362,8 @@ async def get_subscriptions() -> List[Dict]:
     """获取订阅列表"""
     db = await get_db()
     try:
-        rows = await db.execute("SELECT * FROM subscriptions ORDER BY created_at DESC").fetchall()
+        cur = await db.execute("SELECT * FROM subscriptions ORDER BY created_at DESC")
+        rows = await cur.fetchall()
         return [dict(row) for row in rows]
     finally:
         await db.close()
@@ -393,9 +426,10 @@ async def upload_monitor_events(repo: str, repo_info: Dict, events: List[Dict]):
         ))
 
         # 获取订阅 ID
-        row = await db.execute(
+        cur = await db.execute(
             "SELECT id FROM subscriptions WHERE target = ?", (repo,)
-        ).fetchone()
+        )
+        row = await cur.fetchone()
         subscription_id = row["id"] if row else None
 
         # 插入动态
@@ -422,18 +456,20 @@ async def get_monitor_events(repo: str = None, limit: int = 50) -> List[Dict]:
     db = await get_db()
     try:
         if repo:
-            rows = await db.execute("""
+            cur = await db.execute("""
                 SELECT me.*, wr.stars, wr.forks FROM monitor_events me
                 LEFT JOIN watched_repos wr ON me.repo_name = wr.full_name
                 WHERE me.repo_name = ?
                 ORDER BY me.event_time DESC LIMIT ?
-            """, (repo, limit)).fetchall()
+            """, (repo, limit))
+            rows = await cur.fetchall()
         else:
-            rows = await db.execute("""
+            cur = await db.execute("""
                 SELECT me.*, wr.stars, wr.forks FROM monitor_events me
                 LEFT JOIN watched_repos wr ON me.repo_name = wr.full_name
                 ORDER BY me.event_time DESC LIMIT ?
-            """, (limit,)).fetchall()
+            """, (limit,))
+            rows = await cur.fetchall()
         return [dict(row) for row in rows]
     finally:
         await db.close()
@@ -461,13 +497,15 @@ async def get_reports(date_str: str = None, limit: int = 30) -> List[Dict]:
     db = await get_db()
     try:
         if date_str:
-            rows = await db.execute("""
+            cur = await db.execute("""
                 SELECT * FROM reports WHERE date = ? ORDER BY created_at DESC LIMIT ?
-            """, (date_str, limit)).fetchall()
+            """, (date_str, limit))
+            rows = await cur.fetchall()
         else:
-            rows = await db.execute("""
+            cur = await db.execute("""
                 SELECT * FROM reports ORDER BY date DESC, created_at DESC LIMIT ?
-            """, (limit,)).fetchall()
+            """, (limit,))
+            rows = await cur.fetchall()
         result = []
         for row in rows:
             r = dict(row)
@@ -482,11 +520,100 @@ async def get_report(report_id: int) -> Optional[Dict]:
     """获取报告详情"""
     db = await get_db()
     try:
-        row = await db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
+        cur = await db.execute("SELECT * FROM reports WHERE id = ?", (report_id,))
+        row = await cur.fetchone()
         if row:
             r = dict(row)
             r["content"] = json.loads(row["content"]) if row["content"] else {}
             return r
         return None
+    finally:
+        await db.close()
+
+
+# ── 设置操作 ──
+
+
+async def get_setting(key: str, default: str = None) -> Optional[str]:
+    db = await get_db()
+    try:
+        cur = await db.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = await cur.fetchone()
+        return row["value"] if row else default
+    finally:
+        await db.close()
+
+
+async def set_setting(key: str, value: str) -> None:
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+            (key, value),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def list_settings() -> Dict[str, str]:
+    db = await get_db()
+    try:
+        cur = await db.execute("SELECT key, value FROM settings")
+        rows = await cur.fetchall()
+        return {row["key"]: row["value"] for row in rows}
+    finally:
+        await db.close()
+
+
+# ── 订阅 watch log ──
+
+
+async def upsert_watch_log(subscription_id: int, full_name: str, info: Dict) -> None:
+    db = await get_db()
+    try:
+        await db.execute("""
+            INSERT INTO repo_watch_log
+            (subscription_id, full_name, stars, forks, language, description, last_checked_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(subscription_id, full_name) DO UPDATE SET
+                stars = excluded.stars,
+                forks = excluded.forks,
+                language = excluded.language,
+                description = excluded.description,
+                last_checked_at = CURRENT_TIMESTAMP
+        """, (
+            subscription_id, full_name,
+            info.get("stars", 0), info.get("forks", 0),
+            info.get("language"), info.get("description"),
+        ))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def get_watch_log(subscription_id: int, full_name: str) -> Optional[Dict]:
+    db = await get_db()
+    try:
+        cur = await db.execute(
+            "SELECT * FROM repo_watch_log WHERE subscription_id = ? AND full_name = ?",
+            (subscription_id, full_name),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def list_watch_logs_by_subscription(subscription_id: int) -> List[Dict]:
+    db = await get_db()
+    try:
+        cur = await db.execute(
+            "SELECT * FROM repo_watch_log WHERE subscription_id = ?",
+            (subscription_id,),
+        )
+        rows = await cur.fetchall()
+        return [dict(row) for row in rows]
     finally:
         await db.close()
