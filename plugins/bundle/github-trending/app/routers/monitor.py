@@ -1,5 +1,6 @@
 """监控路由"""
 
+import asyncio
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -8,8 +9,9 @@ from pydantic import BaseModel
 
 from app.database import (
     get_subscriptions, add_subscription, delete_subscription, update_subscription,
-    upload_monitor_events, get_monitor_events
+    upload_monitor_events, get_monitor_events, list_watch_logs_by_subscription,
 )
+from app.monitor_refresh import refresh_one_repo
 
 router = APIRouter()
 
@@ -26,14 +28,29 @@ class SubscriptionResponse(BaseModel):
 
 @router.get("/subscriptions")
 async def list_subscriptions() -> List[Dict]:
-    """获取订阅列表"""
-    return await get_subscriptions()
+    """获取订阅列表(附 watch_log 信息)"""
+    subs = await get_subscriptions()
+    for sub in subs:
+        logs = await list_watch_logs_by_subscription(sub["id"])
+        if logs:
+            sub["last_checked_at"] = logs[0].get("last_checked_at")
+            sub["current_stars"] = logs[0].get("stars", 0)
+            sub["current_forks"] = logs[0].get("forks", 0)
+        else:
+            sub["last_checked_at"] = None
+            sub["current_stars"] = None
+            sub["current_forks"] = None
+    return subs
 
 
 @router.post("/subscriptions")
 async def create_subscription(target: str) -> Dict:
-    """添加订阅"""
-    return await add_subscription(target)
+    """添加订阅,触发立即拉一次详情"""
+    result = await add_subscription(target)
+    # 触发一次立即刷新(不阻塞响应)
+    sub_id = result["id"]
+    asyncio.create_task(_initial_refresh(sub_id, target))
+    return result
 
 
 @router.delete("/subscriptions/{subscription_id}")
@@ -92,3 +109,14 @@ async def upload_events(data: MonitorUploadRequest) -> Dict:
 async def list_events(repo: Optional[str] = None, limit: int = 50) -> List[Dict]:
     """获取监控动态"""
     return await get_monitor_events(repo, limit)
+
+
+async def _initial_refresh(subscription_id: int, target: str) -> None:
+    """订阅创建后异步立即拉一次 repo 详情。"""
+    try:
+        await refresh_one_repo(target, subscription_id)
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning(
+            "Initial refresh failed for %s: %s", target, e
+        )
