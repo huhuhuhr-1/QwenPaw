@@ -2,7 +2,8 @@
   "id": "system-monitor",
   "name": "System Monitor",
   "version": "1.0.0",
-  "type": "frontend",
+  "type": "general",
+  "icon": "📊",
   "description": "系统监控插件 - 实时采集和展示主机 CPU、内存、磁盘、句柄、负载指标",
   "description_i18n": {
     "zh-CN": "系统监控插件 - 实时采集和展示主机 CPU、内存、磁盘、句柄、负载指标",
@@ -12,7 +13,12 @@
     "frontend": "frontend/dist/index.iife.js",
     "backend": "plugin.py"
   },
-  "dependencies": [],
+  "dependencies": [
+    "psutil>=5.9.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pydantic>=2.0.0"
+  ],
   "min_version": "1.1.7",
   "meta": {
     "category": "system-tools",

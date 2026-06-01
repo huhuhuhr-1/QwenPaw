@@ -5,13 +5,13 @@ import asyncio
 import logging
 from datetime import datetime
 
-from app.db.sqlite import get_db, insert_metric, insert_process_snapshot
-from app.services.collector_cpu import collect_cpu_metrics
-from app.services.collector_memory import collect_memory_metrics
-from app.services.collector_disk import collect_disk_metrics
-from app.services.collector_handle import collect_handle_metrics
-from app.services.collector_process import collect_top_processes
-from app.config import get_interval, get_retention_days, is_metric_enabled
+from sysmon.db.sqlite import get_db, insert_metric, insert_process_snapshot
+from sysmon.services.collector_cpu import collect_cpu_metrics
+from sysmon.services.collector_memory import collect_memory_metrics
+from sysmon.services.collector_disk import collect_disk_metrics
+from sysmon.services.collector_handle import collect_handle_metrics
+from sysmon.services.collector_process import collect_top_processes
+from sysmon.config import get_interval, get_retention_days, is_metric_enabled
 
 logger = logging.getLogger(__name__)
 

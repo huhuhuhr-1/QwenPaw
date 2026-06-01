@@ -13,14 +13,19 @@ Uses the plugin startup hook to start the FastAPI backend and install skills.
 __all__ = ["plugin"]
 
 import asyncio
+import json
 import logging
 import os
 import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 PLUGIN_DIR = Path(__file__).parent
+_PLUGIN_ID = "media-studio"
 _PROCESS_NAME = "media-studio"
 _PROCESS_PORT = 7899
 
@@ -92,6 +97,76 @@ def _update_pool_manifest(pool_dir: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Dependency installation (persistent)
+# ---------------------------------------------------------------------------
+
+
+def _ensure_dependencies() -> bool:
+    """Install plugin's declared dependencies to ``.deps/`` if missing.
+
+    The deps directory is a subdirectory of PLUGIN_DIR, which lives under
+    ``/app/working/plugins/<id>/`` — bind-mounted from the host.  This makes
+    installed packages survive container recreation.
+
+    Returns True if deps are ready, False if install failed (logged but not
+    raised so other plugin hooks can still proceed).
+    """
+    deps_dir = PLUGIN_DIR / ".deps"
+    marker = deps_dir / ".installed"
+
+    if marker.exists():
+        return True
+
+    try:
+        manifest = json.loads((PLUGIN_DIR / "plugin.json").read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.error("[%s] Cannot read plugin.json: %s", _PLUGIN_ID, exc)
+        return False
+
+    deps = manifest.get("dependencies", [])
+    if not deps:
+        marker.write_text("no-deps\n", encoding="utf-8")
+        return True
+
+    deps_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(
+        "[%s] Installing %d dependencies to %s …",
+        _PLUGIN_ID, len(deps), deps_dir,
+    )
+
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable, "-m", "pip", "install",
+                "--disable-pip-version-check", "--no-input", "--quiet",
+                "--target", str(deps_dir),
+                *deps,
+            ],
+            capture_output=True, text=True, timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        logger.error("[%s] pip install timed out after 300s", _PLUGIN_ID)
+        return False
+    except Exception as exc:
+        logger.error("[%s] pip install raised: %s", _PLUGIN_ID, exc)
+        return False
+
+    if proc.returncode != 0:
+        logger.error(
+            "[%s] pip install failed (rc=%d): %s",
+            _PLUGIN_ID, proc.returncode, proc.stderr[-2000:],
+        )
+        return False
+
+    marker.write_text(
+        f"installed at {time.time()} with {len(deps)} deps\n",
+        encoding="utf-8",
+    )
+    logger.info("[%s] Dependencies installed successfully", _PLUGIN_ID)
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Backend process management
 # ---------------------------------------------------------------------------
 
@@ -119,6 +194,14 @@ async def _start_backend_async() -> asyncio.subprocess.Process:
     env["MEDIA_STUDIO_HOST"] = "127.0.0.1"
     env["MEDIA_STUDIO_PORT"] = str(_PROCESS_PORT)
 
+    # Make plugin-installed packages importable in the subprocess
+    deps_dir = PLUGIN_DIR / ".deps"
+    if deps_dir.exists():
+        existing_pp = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            f"{deps_dir}{os.pathsep}{existing_pp}" if existing_pp else str(deps_dir)
+        )
+
     import sys
     return await asyncio.subprocess.create_subprocess_exec(
         sys.executable, "-m", "app.main",
@@ -143,7 +226,19 @@ async def _ensure_backend() -> None:
         if _is_backend_running():
             logger.info("Media Studio backend started successfully")
         else:
-            stdout, stderr = await _backend_proc.communicate()
+            # Capture stderr with a timeout — never block forever if uvicorn
+            # is still starting or has hung without exiting.
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    _backend_proc.communicate(),
+                    timeout=5.0,
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Media Studio backend failed to start within 5s of "
+                    "post-sleep health check; still running but unreachable"
+                )
+                stdout, stderr = b"", b"<timeout>"
             logger.error(
                 "Media Studio backend failed to start.\nstdout: %s\nstderr: %s",
                 stdout.decode(errors="replace"),
@@ -181,6 +276,9 @@ class MediaStudioPlugin:
 
         logger.info("[MediaStudio] Installing skills to pool...")
         _install_plugin_skills()
+
+        logger.info("[MediaStudio] Ensuring dependencies are installed...")
+        _ensure_dependencies()
 
         logger.info("[MediaStudio] Ensuring backend is running...")
         await _ensure_backend()

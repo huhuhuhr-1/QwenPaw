@@ -1,8 +1,8 @@
-/// <reference types="../../../../console/src/global" />
-
 (function () {
-  const React = (window as any).React;
-  const antd = (window as any).antd;
+  // Host: prefer QwenPaw.host (always populated) over window.* (tree-shaken in prod)
+  const host = (window as any).QwenPaw?.host;
+  const React = host?.React || (window as any).React;
+  const antd = host?.antd || (window as any).antd;
 
   const {
     Card, Row, Col, Statistic, Select, DatePicker, Table, Button,
@@ -11,19 +11,27 @@
   } = antd;
 
   const { RangePicker } = DatePicker;
-  const { TabPane } = Tabs;
   const { Text } = Typography;
   const { Option } = Select;
 
-  const API_BASE = "http://localhost:7900";
+  // 走宿主 host.getApiUrl:它已经会拼 /api 前缀。
+  // 调用方写 /api/metrics/current,我们剥掉 /api 再交给 getApiUrl,避免 /api/api/... 404。
+  const buildUrl = (url: string): string => {
+    const stripped = url.replace(/^\/api/, "");
+    if (host?.getApiUrl) return host.getApiUrl(stripped);
+    return url;
+  };
 
   async function api(method: string, url: string, body?: any) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const token = host?.getApiToken ? host.getApiToken() : null;
+    if (token) headers["Authorization"] = `Bearer ${token}`;
     const opts: RequestInit = {
       method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     };
-    const res = await fetch(`${API_BASE}${url}`, opts);
+    const res = await fetch(buildUrl(url), opts);
     if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
     return res.json();
   }
@@ -372,29 +380,23 @@
           activeKey={activeTab}
           onChange={(key) => setActiveTab(key)}
           style={{ padding: "0 16px" }}
-        >
-          <TabPane tab="监控面板" key="monitor">
-            <MonitorPage />
-          </TabPane>
-          <TabPane tab="配置" key="config">
-            <ConfigPage />
-          </TabPane>
-        </Tabs>
+          items={[
+            { key: "monitor", label: "监控面板", children: <MonitorPage /> },
+            { key: "config", label: "配置", children: <ConfigPage /> },
+          ]}
+        />
       </div>
     );
   }
 
   // ============ Register Routes ============
   if ((window as any).QwenPaw) {
-    (window as any).QwenPaw.registerRoutes([{
+    (window as any).QwenPaw.registerRoutes("system-monitor", [{
       path: "/plugin/system-monitor",
       component: App,
+      label: "系统监控",
+      icon: "📊",
+      priority: 50,
     }]);
-  }
-
-  // ============ Render ============
-  const root = document.getElementById("root");
-  if (root) {
-    (React as any).render((React as any).createElement(App), root);
   }
 })();

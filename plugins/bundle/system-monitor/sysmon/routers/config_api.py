@@ -6,7 +6,7 @@ from typing import Dict, Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.config import get_monitor_config, update_config
+from sysmon.config import get_monitor_config, update_config
 
 router = APIRouter()
 

@@ -5,7 +5,7 @@ import psutil
 from datetime import datetime
 from typing import List
 
-from app.db.models import ProcessSnapshot
+from sysmon.db.models import ProcessSnapshot
 
 
 def collect_top_processes(limit: int = 10, sort_by: str = "cpu") -> List[ProcessSnapshot]:

@@ -1,22 +1,32 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from "vite";
 
 export default defineConfig({
+  esbuild: {
+    jsxFactory: "React.createElement",
+    jsxFragment: "React.Fragment",
+  },
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   build: {
     lib: {
-      entry: 'src/plugin-entry.tsx',
-      name: 'SystemMonitorPlugin',
-      fileName: 'index',
-      formats: ['iife'],
+      entry: "src/plugin-entry.tsx",
+      name: "SystemMonitorPlugin",
+      formats: ["iife"],
+      fileName: () => "index.iife.js",
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      external: ["react", "react-dom"],
       output: {
         globals: {
-          react: 'React',
-          'react-dom': 'ReactDOM',
-          'react/jsx-runtime': 'jsxRuntime',
+          react: "window.React",
+          "react-dom": "window.ReactDOM",
         },
+        inlineDynamicImports: true,
       },
     },
+    minify: false,
+    sourcemap: true,
+    outDir: "dist",
   },
 });

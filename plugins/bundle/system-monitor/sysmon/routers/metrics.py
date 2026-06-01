@@ -7,12 +7,12 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from app.db.sqlite import query_metrics, query_process_top, get_data_stats
-from app.services.collector_cpu import collect_cpu_metrics
-from app.services.collector_memory import collect_memory_metrics
-from app.services.collector_disk import collect_disk_metrics
-from app.services.collector_handle import collect_handle_metrics
-from app.services.cleaner import cleanup_old_data, get_stats
+from sysmon.db.sqlite import query_metrics, query_process_top, get_data_stats
+from sysmon.services.collector_cpu import collect_cpu_metrics
+from sysmon.services.collector_memory import collect_memory_metrics
+from sysmon.services.collector_disk import collect_disk_metrics
+from sysmon.services.collector_handle import collect_handle_metrics
+from sysmon.services.cleaner import cleanup_old_data, get_stats
 
 router = APIRouter()
 
@@ -178,7 +178,7 @@ class CleanupRequest(BaseModel):
 async def cleanup(request: CleanupRequest):
     """Manual data cleanup."""
     if request.before:
-        from app.db.sqlite import cleanup_data
+        from sysmon.db.sqlite import cleanup_data
         metrics_deleted, processes_deleted = cleanup_data(request.before)
         return {"metrics_deleted": metrics_deleted, "processes_deleted": processes_deleted, "before": request.before}
     else:

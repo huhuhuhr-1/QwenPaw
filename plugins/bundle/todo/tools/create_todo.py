@@ -10,7 +10,7 @@ from ..db import get_conn
 def create_todo(description: str, **kwargs) -> ToolResponse:
     """Create a new task."""
     try:
-        from ...app.agent_context import get_current_session_id, get_current_agent_id
+        from qwenpaw.app.agent_context import get_current_session_id, get_current_agent_id
 
         session_id = str(get_current_session_id() or "")
         agent_id = str(get_current_agent_id() or "unknown")

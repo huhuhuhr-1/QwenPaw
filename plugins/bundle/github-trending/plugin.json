@@ -2,7 +2,8 @@
   "id": "github-trending",
   "name": "GitHub Trend Hub",
   "version": "0.1.0",
-  "type": "frontend",
+  "type": "general",
+  "icon": "📈",
   "description": "GitHub 热榜数据管理 — 采集、展示、订阅监控、趋势分析",
   "description_i18n": {
     "zh-CN": "GitHub 热榜数据管理 — 采集、展示、订阅监控、趋势分析",
@@ -10,28 +11,22 @@
   },
   "author": "hr",
   "entry": {
-    "frontend": "frontend/dist/index.js",
+    "frontend": "dist/index.js",
     "backend": "plugin.py"
   },
-  "dependencies": ["httpx>=0.26.0"],
-  "min_version": "1.1.7",
   "meta": {
     "category": "开发工具",
     "features": ["热榜采集", "仓库检索", "订阅监控", "趋势分析"],
     "tools": [
-      {"name": "trending_get_daily", "description": "获取每日 GitHub 热榜数据", "icon": "🔥"},
-      {"name": "trending_get_dates", "description": "获取有热榜数据的日期列表", "icon": "📅"},
       {"name": "trending_upload", "description": "上传热榜采集数据到存储", "icon": "📤"},
-      {"name": "repo_search", "description": "搜索 GitHub 仓库", "icon": "🔍"},
-      {"name": "repo_detail", "description": "获取仓库详细信息", "icon": "💾"},
-      {"name": "repo_trend", "description": "获取仓库历史趋势", "icon": "📈"},
-      {"name": "monitor_list_subscriptions", "description": "获取订阅列表", "icon": "📡"},
-      {"name": "monitor_subscribe", "description": "订阅 GitHub 仓库", "icon": "➕"},
-      {"name": "monitor_unsubscribe", "description": "取消订阅", "icon": "➖"},
-      {"name": "monitor_get_events", "description": "获取监控动态", "icon": "📋"},
-      {"name": "monitor_upload", "description": "上传监控数据", "icon": "📤"},
-      {"name": "report_upload", "description": "上传分析报告", "icon": "📊"},
-      {"name": "report_list", "description": "获取报告列表", "icon": "📋"}
+      {"name": "report_upload", "description": "上传分析报告", "icon": "📊"}
     ]
-  }
+  },
+  "dependencies": [
+    "httpx>=0.26.0",
+    "aiosqlite>=0.20.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0"
+  ],
+  "min_version": "1.1.7"
 }

@@ -8,11 +8,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import load_config
-from app.db.sqlite import get_db
-from app.routers import health, metrics, config_api
-from app.services.scheduler import start_scheduler, stop_scheduler
-from app.services.cleaner import cleanup_old_data
+from sysmon.config import load_config
+from sysmon.db.sqlite import get_db
+from sysmon.routers import health, metrics, config_api
+from sysmon.services.scheduler import start_scheduler, stop_scheduler
+from sysmon.services.cleaner import cleanup_old_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

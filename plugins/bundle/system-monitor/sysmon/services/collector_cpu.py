@@ -5,7 +5,7 @@ import psutil
 from datetime import datetime
 from typing import List
 
-from app.db.models import MetricRecord
+from sysmon.db.models import MetricRecord
 
 
 def collect_cpu_metrics() -> List[MetricRecord]:

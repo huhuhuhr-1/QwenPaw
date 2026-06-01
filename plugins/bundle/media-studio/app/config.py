@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # Server
     host: str = "0.0.0.0"
     port: int = 7899
-    data_dir: str = str(PROJECT_ROOT / "data")
+    data_dir: str = str(Path.home() / ".qwenpaw" / "data" / "media-studio")
     log_level: str = "INFO"
 
     # Storage

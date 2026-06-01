@@ -10,7 +10,7 @@ export default defineConfig({
       formats: ["es"],
       fileName: () => "index.js",
     },
-    outDir: resolve(__dirname, "../dist"),
+    outDir: resolve(__dirname, "dist"),
     emptyOutDir: true,
     rollupOptions: {
       external: ["react", "react-dom"],

@@ -11,7 +11,7 @@
     CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, ThunderboltOutlined,
     HourglassOutlined, InboxOutlined, ArrowLeftOutlined, StopOutlined,
     RedoOutlined, SearchOutlined,
-  } = window.antdIcons || {};
+  } = (host.antdIcons || window.antdIcons || {}) as Record<string, React.ComponentType>;
 
   const {
     Table, Tag, Button, Upload, message, Modal, Popconfirm, Space, Typography,

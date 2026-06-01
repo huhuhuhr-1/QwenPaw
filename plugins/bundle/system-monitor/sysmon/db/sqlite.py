@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-DB_PATH = Path(__file__).parent.parent / "data" / "system_monitor.db"
+DB_PATH = Path.home() / ".qwenpaw" / "data" / "system-monitor.db"
 
 
 def get_db() -> sqlite3.Connection:

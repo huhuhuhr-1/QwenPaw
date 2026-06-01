@@ -3,6 +3,7 @@
   "name": "Todo",
   "version": "0.1.0",
   "type": "general",
+  "icon": "✅",
   "description": "Agent task management — create, track, and update tasks during sessions.",
   "description_i18n": {
     "zh-CN": "任务管理 — 在会话中创建、跟踪和更新任务。",
@@ -11,9 +12,12 @@
   "author": "QwenPaw",
   "entry": {
     "backend": "plugin.py",
-    "frontend": "dist/index.js"
+    "frontend": "frontend/dist/index.js"
   },
-  "dependencies": [],
+  "dependencies": [
+    "fastapi>=0.100",
+    "pydantic>=2.0"
+  ],
   "min_version": "1.1.7",
   "meta": {
     "tools": [

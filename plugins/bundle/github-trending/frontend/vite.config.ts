@@ -1,28 +1,19 @@
-import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 import { resolve } from "path";
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  resolve: {
-    alias: { "@": resolve(__dirname, "src") },
-  },
-  define: {
-    "process.env.NODE_ENV": JSON.stringify("production"),
-  },
+  plugins: [react({ jsxRuntime: "classic" })],
   build: {
     lib: {
-      entry: resolve(__dirname, "src/plugin-entry.ts"),
-      name: "GitHubTrending",
-      formats: ["iife"],
+      entry: resolve(__dirname, "src/index.tsx"),
+      formats: ["es"],
       fileName: () => "index.js",
     },
+    outDir: resolve(__dirname, "../dist"),
+    emptyOutDir: true,
     rollupOptions: {
-      external: [],
-      output: {
-        inlineDynamicImports: true,
-      },
+      external: ["react", "react-dom"],
     },
-    minify: false,
-    sourcemap: true,
-    outDir: "dist",
   },
 });

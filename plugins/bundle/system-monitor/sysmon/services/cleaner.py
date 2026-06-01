@@ -4,8 +4,8 @@
 import logging
 from datetime import datetime, timedelta
 
-from app.db.sqlite import cleanup_data
-from app.config import get_retention_days
+from sysmon.db.sqlite import cleanup_data
+from sysmon.config import get_retention_days
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def cleanup_old_data() -> dict:
 def get_stats() -> dict:
     """Get data statistics."""
     try:
-        from app.db.sqlite import get_data_stats
+        from sysmon.db.sqlite import get_data_stats
         return get_data_stats()
     except Exception as e:
         logger.exception("Failed to get stats: %s", e)

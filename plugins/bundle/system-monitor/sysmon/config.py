@@ -28,7 +28,7 @@ def load_config() -> Dict[str, Any]:
     """Load config from database (called at startup)."""
     global _config
     try:
-        from app.db.sqlite import get_config_value, set_config_value
+        from sysmon.db.sqlite import get_config_value, set_config_value
         stored = get_config_value("monitor_config")
         if stored:
             _config = json.loads(stored)
@@ -60,7 +60,7 @@ def update_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
 def save_config() -> None:
     """Persist current config to database."""
     try:
-        from app.db.sqlite import set_config_value
+        from sysmon.db.sqlite import set_config_value
         set_config_value("monitor_config", json.dumps(_config, ensure_ascii=False))
     except Exception as e:
         logger.error("Failed to save config: %s", e)

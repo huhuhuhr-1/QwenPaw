@@ -1,11 +1,20 @@
+# -*- coding: utf-8 -*-
+"""Todo —— Agent 任务管理插件"""
+
+import logging
+
 from qwenpaw.plugins.api import PluginApi
 
-from .api.routes import router
+from .routers.routes import router
 from .db import init_db
 from .tools.create_todo import create_todo
 from .tools.get_todo import get_todo
 from .tools.list_todos import list_todos
 from .tools.update_todo import update_todo
+
+__all__ = ["plugin"]
+
+logger = logging.getLogger(__name__)
 
 
 class TodoPlugin:

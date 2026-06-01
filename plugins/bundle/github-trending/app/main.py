@@ -1,5 +1,6 @@
 """GitHub Trend Hub 后端服务"""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -17,8 +18,36 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("starting up...")
     await init_db()
-    yield
-    logger.info("shutting down...")
+
+    # 启动 trending collector 后台任务
+    collector_task: asyncio.Task | None = None
+    if settings.collect_enabled:
+        from app.collector import run_collector_loop
+        collector_task = asyncio.create_task(
+            run_collector_loop(),
+            name="github-trending-collector",
+        )
+        logger.info(
+            "Trending collector started: interval=%d min, languages=%s, period=%s",
+            settings.collect_interval_min,
+            settings.collect_languages,
+            settings.collect_period,
+        )
+    else:
+        logger.info("Trending collector disabled by config")
+
+    try:
+        yield
+    finally:
+        if collector_task is not None:
+            collector_task.cancel()
+            try:
+                await collector_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Collector task ended with: %s", e)
+        logger.info("shutting down...")
 
 
 app = FastAPI(
@@ -30,7 +59,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # 认证走 Authorization: Bearer,不需要 cookies;allow_credentials=True
+    # 与 allow_origins=["*"] 组合会被浏览器拒,与本插件无关。
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
