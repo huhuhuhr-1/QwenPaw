@@ -41,7 +41,7 @@ def parse_repo_html(html: str, full_name: str) -> Dict[str, Any]:
 
     desc_p = soup.select_one("p.f4.my-3, p[data-test-selector='repo-description']")
     if not desc_p:
-        for p in soup.select("article p, .BorderGrid p, body > p"):
+        for p in soup.select("article p, .BorderGrid p"):
             text = p.get_text(strip=True)
             if 5 < len(text) < 500 and "github.com" not in text.lower():
                 desc_p = p

@@ -8,11 +8,13 @@ def test_parse_repo_html_basic():
     html = """
     <html><body>
     <h1>owner / name</h1>
-    <span itemprop="programmingLanguage">Python</span>
-    <p>Some description text</p>
-    <a href="/owner/name/stargazers">1,234</a>
-    <a href="/owner/name/network/members">56</a>
-    <relative-time datetime="2026-05-30T10:00:00Z">3 days ago</relative-time>
+    <article>
+        <span itemprop="programmingLanguage">Python</span>
+        <p>Some description text</p>
+        <a href="/owner/name/stargazers">1,234</a>
+        <a href="/owner/name/network/members">56</a>
+        <relative-time datetime="2026-05-30T10:00:00Z">3 days ago</relative-time>
+    </article>
     </body></html>
     """
     info = monitor_refresh.parse_repo_html(html, "owner/name")
