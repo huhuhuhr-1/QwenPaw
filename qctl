@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# qctl —— QwenPaw 源码服务管理
+#
+# 用法:
+#   qctl start           后台启动 qwenpaw app (port 8088)
+#   qctl stop            优雅停止 (SIGTERM,5s 后 SIGKILL)
+#   qctl restart         stop + start
+#   qctl status          PID + 端口 + /health
+#   qctl logs [-n N]     tail 日志(默认 -F 实时,加 -n N 看最近 N 行)
+#   qctl follow          实时 tail + 高亮关键字
+#   qctl attach          前台跑(等同 qwenpaw app)
+#   qctl ports           看 8088 / 7901 (子进程) 监听状态
+#   qctl ps              列出相关进程
+#   qctl clean-pip       杀掉卡死的 pip install
+#
+# 约定:
+#   PID  → /tmp/qwenpaw-source.pid
+#   LOG  → /tmp/qwenpaw-source.log
+#   PORT → 8088 (主 API) + 7901 (github-trending 子进程)
+#
+set -euo pipefail
+
+REPO="/opt/github/QwenPaw"
+VENV="$REPO/.venv"
+PID_FILE="/tmp/qwenpaw-source.pid"
+LOG_FILE="/tmp/qwenpaw-source.log"
+HOST="${QWENPAW_HOST:-127.0.0.1}"
+PORT="${QWENPAW_PORT:-8088}"
+
+C_GREEN='\033[0;32m'
+C_YELLOW='\033[0;33m'
+C_RED='\033[0;31m'
+C_BLUE='\033[0;34m'
+C_OFF='\033[0m'
+
+log()  { printf "${C_BLUE}[qctl]${C_OFF} %s\n" "$*"; }
+ok()   { printf "${C_GREEN}[qctl]${C_OFF} %s\n" "$*"; }
+warn() { printf "${C_YELLOW}[qctl]${C_OFF} %s\n" "$*"; }
+err()  { printf "${C_RED}[qctl]${C_OFF} %s\n" "$*" >&2; }
+
+_get_pid() {
+    if [[ -f "$PID_FILE" ]]; then
+        cat "$PID_FILE"
+    else
+        pgrep -f "qwenpaw app" | head -1 || true
+    fi
+}
+
+cmd_start() {
+    local pid
+    pid="$(_get_pid)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        warn "已经在跑(PID=$pid,端口=$PORT),不要重复启动"
+        cmd_status
+        return 0
+    fi
+    log "启动 qwenpaw app @ $HOST:$PORT ..."
+    cd "$REPO"
+    nohup "$VENV/bin/qwenpaw" app --host "$HOST" --port "$PORT" \
+        > "$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+    disown || true
+    sleep 2
+    local new_pid
+    new_pid="$(cat "$PID_FILE")"
+    if kill -0 "$new_pid" 2>/dev/null; then
+        ok "已启动 PID=$new_pid,日志: $LOG_FILE"
+        log "30s 后会加载 10 个 agent,等 startup complete 出现即可"
+    else
+        err "启动失败,看日志: tail $LOG_FILE"
+        return 1
+    fi
+}
+
+cmd_stop() {
+    local pid
+    pid="$(_get_pid)"
+    if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+        warn "没在跑"
+        rm -f "$PID_FILE"
+        return 0
+    fi
+    log "停 PID=$pid (SIGTERM)..."
+    kill "$pid" 2>/dev/null || true
+    for i in 1 2 3 4 5; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            ok "已停"
+            rm -f "$PID_FILE"
+            return 0
+        fi
+        sleep 1
+    done
+    warn "5s 没退出,强杀 (SIGKILL)"
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    ok "已强杀"
+}
+
+cmd_restart() {
+    cmd_stop
+    sleep 1
+    cmd_start
+}
+
+cmd_status() {
+    local pid
+    pid="$(_get_pid)"
+    printf "${C_BLUE}=== qctl status ===${C_OFF}\n"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        printf "  PID:    ${C_GREEN}%s${C_OFF} (alive)\n" "$pid"
+    else
+        printf "  PID:    ${C_YELLOW}none${C_OFF}\n"
+    fi
+    if curl -sS --max-time 2 -o /dev/null -w "  /api/version: HTTP %{http_code} (%{time_total}s)\n" "http://$HOST:$PORT/api/version" 2>/dev/null; then
+        :
+    else
+        printf "  /api/version: ${C_RED}unreachable${C_OFF}\n"
+    fi
+    local plugin_count
+    plugin_count=$(curl -sS --max-time 2 "http://$HOST:$PORT/api/plugins" 2>/dev/null | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+    printf "  插件:   %s 个已加载\n" "$plugin_count"
+    cmd_ports
+}
+
+cmd_logs() {
+    local n=""
+    if [[ "${1:-}" == "-n" ]] && [[ -n "${2:-}" ]]; then
+        n="$2"
+    fi
+    if [[ -n "$n" ]]; then
+        tail -n "$n" "$LOG_FILE"
+    else
+        tail -F "$LOG_FILE"
+    fi
+}
+
+cmd_follow() {
+    tail -F "$LOG_FILE" 2>/dev/null | \
+        grep --line-buffered -E "ERROR|Traceback|Loaded plugin|Trending collector|Startup hook|Agent startup complete|Collected|Fetch failed|^\[qctl\]" | \
+        sed -u "s/ERROR/${C_RED}ERROR${C_OFF}/g; s/Traceback/${C_RED}Traceback${C_OFF}/g; s/Loaded plugin/${C_GREEN}Loaded plugin${C_OFF}/g; s/Trending collector/${C_GREEN}Trending collector${C_OFF}/g; s/Agent startup complete/${C_GREEN}Agent startup complete${C_OFF}/g; s/Collected/${C_GREEN}Collected${C_OFF}/g; s/Fetch failed/${C_RED}Fetch failed${C_OFF}/g"
+}
+
+cmd_attach() {
+    cd "$REPO"
+    exec "$VENV/bin/qwenpaw" app --host "$HOST" --port "$PORT"
+}
+
+cmd_ports() {
+    printf "  端口监听:\n"
+    ss -tlnp 2>/dev/null | awk -v p="$PORT" '$4 ~ ":"p"$"' | head -3 | sed 's/^/    /' || true
+    ss -tlnp 2>/dev/null | awk '$4 ~ ":7901$"' | head -3 | sed 's/^/    /' || true
+}
+
+cmd_ps() {
+    printf "${C_BLUE}=== qwenpaw 相关进程 ===${C_OFF}\n"
+    ps -eo pid,etime,cmd | grep -E "qwenpaw|app\.main" | grep -v grep | head -10 | sed 's/^/  /' || true
+}
+
+cmd_clean_pip() {
+    local n=0
+    for p in $(pgrep -f "pip install" 2>/dev/null || true); do
+        kill -9 "$p" 2>/dev/null && n=$((n+1)) || true
+    done
+    ok "杀掉 $n 个卡死的 pip 进程"
+}
+
+cmd_help() {
+    sed -n '2,21p' "$0"
+}
+
+case "${1:-help}" in
+    start)   cmd_start ;;
+    stop)    cmd_stop ;;
+    restart) cmd_restart ;;
+    status)  cmd_status ;;
+    logs)    shift; cmd_logs "$@" ;;
+    follow)  cmd_follow ;;
+    attach)  cmd_attach ;;
+    ports)   cmd_ports ;;
+    ps)      cmd_ps ;;
+    clean-pip) cmd_clean_pip ;;
+    help|-h|--help) cmd_help ;;
+    *) err "未知命令: $1"; cmd_help; exit 1 ;;
+esac
