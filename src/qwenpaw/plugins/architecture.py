@@ -120,6 +120,11 @@ class PluginManifest(BaseModel):
     min_version: str = "0.1.0"
     meta: Dict[str, Any] = Field(default_factory=dict)
     plugin_type: PluginType = PluginType.GENERAL
+    # 插件图标(emoji 或 URL)。前端 sidebar 拿来显示。
+    icon: str = ""
+    # 本地化文案(plugin.json 顶层 description_i18n)。
+    # 让前端按浏览器语言切换显示,而不是只看英文 description。
+    description_i18n: Dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
