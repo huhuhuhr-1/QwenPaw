@@ -32,8 +32,13 @@ from app.routers.monitor import router as monitor_router  # noqa: E402
 from app.routers.reports import router as reports_router  # noqa: E402
 from app.routers.settings import router as settings_router  # noqa: E402
 
-from tools.trending import trending_upload  # noqa: E402
-from tools.reports import report_upload  # noqa: E402
+from tools.trending import trending_get_daily, trending_get_dates  # noqa: E402
+from tools.repos import repo_search, repo_detail, repo_trend  # noqa: E402
+from tools.monitor import (  # noqa: E402
+    monitor_list_subscriptions,
+    monitor_get_events,
+)
+from tools.reports import report_list  # noqa: E402
 
 
 # ── Skill 安装 ─────────────────────────────────────────────────────
@@ -152,17 +157,53 @@ async def _stop_collector() -> None:
 
 class GitHubTrendingPlugin:
     def register(self, api: PluginApi) -> None:
-        # 1. 注册工具(给 Agent 用)
+        # 1. 注册只读工具(给 Agent 用)
         api.register_tool(
-            tool_name="trending_upload",
-            tool_func=trending_upload,
-            description="上传热榜采集数据到存储。参数: date, language, summary, items(列表)",
-            icon="📤",
+            tool_name="trending_get_daily",
+            tool_func=trending_get_daily,
+            description="获取每日热榜。参数: date, language",
+            icon="🔥",
         )
         api.register_tool(
-            tool_name="report_upload",
-            tool_func=report_upload,
-            description="上传分析报告。参数: date, report_type, content",
+            tool_name="trending_get_dates",
+            tool_func=trending_get_dates,
+            description="获取有数据的日期列表。参数: language",
+            icon="📅",
+        )
+        api.register_tool(
+            tool_name="repo_search",
+            tool_func=repo_search,
+            description="搜索仓库。参数: keyword, limit",
+            icon="🔍",
+        )
+        api.register_tool(
+            tool_name="repo_detail",
+            tool_func=repo_detail,
+            description="获取仓库详情。参数: full_name",
+            icon="📦",
+        )
+        api.register_tool(
+            tool_name="repo_trend",
+            tool_func=repo_trend,
+            description="获取仓库历史趋势。参数: full_name",
+            icon="📈",
+        )
+        api.register_tool(
+            tool_name="monitor_list_subscriptions",
+            tool_func=monitor_list_subscriptions,
+            description="获取订阅列表",
+            icon="📋",
+        )
+        api.register_tool(
+            tool_name="monitor_get_events",
+            tool_func=monitor_get_events,
+            description="获取监控动态。参数: repo, limit",
+            icon="📡",
+        )
+        api.register_tool(
+            tool_name="report_list",
+            tool_func=report_list,
+            description="获取报告列表。参数: date, limit",
             icon="📊",
         )
 
